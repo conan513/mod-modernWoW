@@ -1,0 +1,30 @@
+# Normalize line endings for all text files
+* text=auto eol=lf
+
+# C++ source files
+*.cpp text eol=lf
+*.h   text eol=lf
+*.hpp text eol=lf
+
+# CMake
+*.cmake text eol=lf
+CMakeLists.txt text eol=lf
+
+# SQL
+*.sql text eol=lf
+
+# Config
+*.conf text eol=lf
+*.conf.dist text eol=lf
+
+# Lua
+*.lua text eol=lf
+
+# Docs
+*.md  text eol=lf
+*.txt text eol=lf
+
+# Images — binary, no newline conversion
+*.png binary
+*.jpg binary
+*.ico binary

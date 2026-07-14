@@ -1,0 +1,35 @@
+# mod-modernWoW — .gitignore
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.dll
+*.lib
+*.pdb
+
+# CMake build directories
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# IDE files
+.vscode/
+.idea/
+*.user
+*.suo
+*.sln
+*.vcxproj
+*.vcxproj.filters
+
+# Compiled config (copy of .conf.dist without .dist)
+conf/*.conf
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
