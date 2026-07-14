@@ -28,7 +28,6 @@
 #include "Player.h"
 #include "Guild.h"
 #include "GuildMgr.h"
-#include "Loot.h"
 #include "LootMgr.h"
 #include "Mail.h"
 #include "World.h"
