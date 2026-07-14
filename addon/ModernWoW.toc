@@ -1,0 +1,18 @@
+## Interface: 30300
+## Title: ModernWoW
+## Notes: Modernizes the WoW 3.3.5 experience with QoL improvements from retail WoW.
+## Author: mod-modernWoW
+## Version: 1.0.0
+## DefaultState: enabled
+## SavedVariables: ModernWoWDB
+## SavedVariablesPerCharacter: ModernWoWCharDB
+
+## Main init
+ModernWoW.lua
+
+## Feature modules
+Modules\AutoLoot.lua
+Modules\QuestTracker.lua
+Modules\Collections.lua
+Modules\DamageMeter.lua
+Modules\ModernUnitFrames.lua

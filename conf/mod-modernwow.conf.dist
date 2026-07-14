@@ -1,0 +1,163 @@
+########################################
+# mod-modernWoW Configuration File
+########################################
+
+[worldserver]
+
+#####################################
+# GENERAL
+#####################################
+
+# Enable/Disable the entire mod-modernWoW module
+# Default: 1 (enabled)
+ModernWoW.Enable = 1
+
+# Announce module load on startup
+# Default: 1 (enabled)
+ModernWoW.Announce = 1
+
+#####################################
+# AUTO-LOOT
+#####################################
+
+# Automatically loot all items from a corpse on open
+# 0 = disabled (vanilla behavior)
+# 1 = auto-loot all items
+# 2 = auto-loot only items below quality threshold
+# Default: 1
+ModernWoW.AutoLoot.Enable = 1
+
+# Quality threshold for auto-loot mode 2 (0=Poor, 1=Common, 2=Uncommon, 3=Rare, 4=Epic)
+# Default: 1 (auto-loot Poor and Common, manual for Uncommon+)
+ModernWoW.AutoLoot.Threshold = 1
+
+# Auto-loot gold as well
+# Default: 1 (enabled)
+ModernWoW.AutoLoot.Gold = 1
+
+#####################################
+# DYNAMIC CREATURE SCALING
+#####################################
+
+# Enable dynamic creature level scaling
+# Creatures will scale to player level in all zones
+# Default: 1 (enabled)
+ModernWoW.DynamicScaling.Enable = 1
+
+# Minimum creature level (floor) - do not scale below this
+# Default: 1
+ModernWoW.DynamicScaling.MinLevel = 1
+
+# Maximum creature level (ceiling)
+# Default: 80
+ModernWoW.DynamicScaling.MaxLevel = 80
+
+# Health scaling multiplier relative to level difference
+# Default: 1.0
+ModernWoW.DynamicScaling.HealthMultiplier = 1.0
+
+# Damage scaling multiplier relative to level difference
+# Default: 1.0
+ModernWoW.DynamicScaling.DamageMultiplier = 1.0
+
+# Scale XP reward along with level
+# Default: 1 (enabled)
+ModernWoW.DynamicScaling.ScaleXP = 1
+
+# Scale loot quality along with level
+# Default: 1 (enabled)
+ModernWoW.DynamicScaling.ScaleLoot = 1
+
+# Blacklisted map IDs (comma separated) - scaling disabled in these
+# Example: "509,469" (AQ40, BWL)
+# Default: "" (all maps scaled)
+ModernWoW.DynamicScaling.MapBlacklist = ""
+
+# Blacklist raid instances from scaling
+# Default: 1 (raids not scaled)
+ModernWoW.DynamicScaling.ExcludeRaids = 1
+
+#####################################
+# PERSONAL LOOT
+#####################################
+
+# Enable Personal Loot mode for groups
+# 0 = disabled (vanilla group loot)
+# 1 = personal loot for all group content
+# 2 = personal loot only in dungeons/raids
+# Default: 1
+ModernWoW.PersonalLoot.Enable = 1
+
+# Personal loot bonus drop chance multiplier when alone
+# Default: 1.0 (no bonus)
+ModernWoW.PersonalLoot.SoloMultiplier = 1.2
+
+#####################################
+# SPELL QUEUE
+#####################################
+
+# Enable spell queue window (lag tolerance)
+# Allows casting the next spell up to X ms before the GCD ends
+# Default: 1 (enabled)
+ModernWoW.SpellQueue.Enable = 1
+
+# Spell queue window in milliseconds
+# Default: 400
+ModernWoW.SpellQueue.WindowMs = 400
+
+#####################################
+# WORLD QUESTS
+#####################################
+
+# Enable daily World Quest system
+# Default: 1 (enabled)
+ModernWoW.WorldQuests.Enable = 1
+
+# Number of active world quests at a time per player
+# Default: 12
+ModernWoW.WorldQuests.ActiveCount = 12
+
+# World quest duration in hours
+# Default: 24
+ModernWoW.WorldQuests.DurationHours = 24
+
+#####################################
+# CATCH-UP MECHANIC
+#####################################
+
+# Enable catch-up mechanic for low-level characters on an account
+# that already has a max-level character
+# Default: 1 (enabled)
+ModernWoW.CatchUp.Enable = 1
+
+# XP bonus multiplier for catch-up characters
+# Default: 2.0 (double XP)
+ModernWoW.CatchUp.XPMultiplier = 2.0
+
+# Loot quality bonus for catch-up (0 = disabled)
+# Default: 1 (enabled)
+ModernWoW.CatchUp.BetterLoot = 1
+
+#####################################
+# INSTANT MAIL
+#####################################
+
+# Deliver mail instantly (no 1-hour delay)
+# Default: 1 (enabled)
+ModernWoW.InstantMail.Enable = 1
+
+#####################################
+# GUILD PERKS
+#####################################
+
+# Enable simplified guild perk system
+# Default: 1 (enabled)
+ModernWoW.GuildPerks.Enable = 1
+
+# XP bonus granted by guild (percentage)
+# Default: 10 (10% bonus guild XP)
+ModernWoW.GuildPerks.XPBonus = 10
+
+# Cash flow perk: percentage of loot gold auto-deposited to guild bank
+# Default: 5 (5%)
+ModernWoW.GuildPerks.CashFlow = 5
