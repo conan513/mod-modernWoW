@@ -73,7 +73,6 @@
 #include "ModernWoW_Config.h"
 #include "ScriptMgr.h"
 #include "Creature.h"
-#include "CreatureTemplate.h"
 #include "Map.h"
 #include "Player.h"
 #include "SpellInfo.h"
