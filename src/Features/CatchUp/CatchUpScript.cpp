@@ -18,6 +18,7 @@
 #include "ScriptMgr.h"
 #include "Player.h"
 #include "DatabaseEnv.h"
+#include "Chat.h"
 #include "Log.h"
 #include <unordered_set>
 

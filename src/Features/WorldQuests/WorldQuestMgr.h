@@ -7,6 +7,7 @@
 #define MOD_MODERNWOW_WORLDQUESTMGR_H
 
 #include "Common.h"
+#include "ObjectGuid.h"
 #include <vector>
 #include <unordered_map>
 
