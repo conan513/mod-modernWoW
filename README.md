@@ -139,6 +139,28 @@ LIMIT 50;
 | `/mwow meter` | Toggle damage meter |
 | `/collections` | Open Collections Journal |
 
+## Screenshots
+
+### Dynamic Per-Player Content Scaling
+Two players of different levels see the same creature at their own level — both yellow, both equally challenged.
+
+![Dynamic Scaling](docs/scaling.png)
+
+### Damage Meter
+A lightweight built-in combat damage meter with per-player color-coded bars and DPS totals.
+
+![Damage Meter](docs/damage_meter.png)
+
+### Collections Journal
+Browse and manage all your mounts and companions in a modern icon grid window.
+
+![Collections Journal](docs/collections.png)
+
+### Addon HUD (Unit Frames, Quest Tracker, Auto-Loot)
+Class-colored health bars, World Quest tracker with gold stars, and `✓ Looted!` feedback animations.
+
+![Addon HUD](addon.png)
+
 ## Requirements
 
 - [AzerothCore](https://github.com/azerothcore/azerothcore-wotlk) (latest)
