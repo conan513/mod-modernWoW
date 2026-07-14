@@ -12,7 +12,7 @@
 #include "ScriptMgr.h"
 #include "Player.h"
 #include "Quest.h"
-#include "ChatHandler.h"
+#include "Chat.h"
 #include "GameTime.h"
 #include "Log.h"
 #include <ctime>

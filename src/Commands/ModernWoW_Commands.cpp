@@ -16,7 +16,7 @@
 #include "WorldQuestMgr.h"
 #include "ScriptMgr.h"
 #include "ChatCommand.h"
-#include "ChatHandler.h"
+#include "Chat.h"
 #include "Player.h"
 #include "GameTime.h"
 #include "Log.h"
