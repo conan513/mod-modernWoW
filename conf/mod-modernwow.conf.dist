@@ -147,6 +147,15 @@ ModernWoW.CatchUp.BetterLoot = 1
 ModernWoW.InstantMail.Enable = 1
 
 #####################################
+# QUESTS
+#####################################
+
+# Make lower-level quests show as normal (gold exclamation mark)
+# instead of low-level (silver exclamation mark) and not hidden by default.
+# Default: 1 (enabled)
+ModernWoW.Quests.ShowLowLevelAsNormal = 1
+
+#####################################
 # GUILD PERKS
 #####################################
 

@@ -69,6 +69,9 @@ public:
     // Instant Mail
     bool   InstantMailEnabled;
 
+    // Quests
+    bool   QuestsShowLowLevelAsNormal;
+
     // Guild Perks
     bool   GuildPerksEnabled;
     uint32 GuildPerksXPBonus;

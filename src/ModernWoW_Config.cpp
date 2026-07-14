@@ -83,6 +83,9 @@ void ModernWoWConfig::Load()
     // Instant Mail
     InstantMailEnabled = sConfigMgr->GetOption<bool>("ModernWoW.InstantMail.Enable", true);
 
+    // Quests
+    QuestsShowLowLevelAsNormal = sConfigMgr->GetOption<bool>("ModernWoW.Quests.ShowLowLevelAsNormal", true);
+
     // Guild Perks
     GuildPerksEnabled  = sConfigMgr->GetOption<bool>("ModernWoW.GuildPerks.Enable", true);
     GuildPerksXPBonus  = sConfigMgr->GetOption<uint32>("ModernWoW.GuildPerks.XPBonus", 10);

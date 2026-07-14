@@ -100,23 +100,31 @@ public:
 };
 
 // ---------------------------------------------------------------------------
-// WorldScript — Instant Mail (zero delivery delay)
+// WorldScript — Global Config Overrides (Instant Mail & Low-Level Quests)
 // ---------------------------------------------------------------------------
-class ModernWoW_InstantMailWorldScript : public WorldScript
+class ModernWoW_GlobalOverridesWorldScript : public WorldScript
 {
 public:
-    ModernWoW_InstantMailWorldScript() : WorldScript("ModernWoW_InstantMailWorldScript") {}
+    ModernWoW_GlobalOverridesWorldScript() : WorldScript("ModernWoW_GlobalOverridesWorldScript") {}
 
     void OnAfterConfigLoad(bool /*reload*/) override
     {
-        if (!sModernWoWConfig->Enabled || !sModernWoWConfig->InstantMailEnabled)
+        if (!sModernWoWConfig->Enabled)
             return;
 
         // Override the global mail delivery delay to 0
-        // This affects sWorld->getIntConfig(CONFIG_MAIL_DELIVERY_DELAY)
-        sWorld->setIntConfig(CONFIG_MAIL_DELIVERY_DELAY, 0);
+        if (sModernWoWConfig->InstantMailEnabled)
+        {
+            sWorld->setIntConfig(CONFIG_MAIL_DELIVERY_DELAY, 0);
+            LOG_DEBUG("module", "mod-modernWoW: Mail delivery delay set to 0.");
+        }
 
-        LOG_DEBUG("module", "mod-modernWoW InstantMail: Mail delivery delay set to 0.");
+        // Override the low level quest hide difference to 99 so they show as normal gold quests
+        if (sModernWoWConfig->QuestsShowLowLevelAsNormal)
+        {
+            sWorld->setIntConfig(CONFIG_QUEST_LOW_LEVEL_HIDE_DIFF, 99);
+            LOG_DEBUG("module", "mod-modernWoW: Low level quest hide difference set to 99.");
+        }
     }
 };
 
@@ -131,6 +139,6 @@ void AddModernWoW_GuildPerksScripts()
             new ModernWoW_GuildPerksPlayerScript();
     }
 
-    if (sModernWoWConfig->InstantMailEnabled)
-        new ModernWoW_InstantMailWorldScript();
+    if (sModernWoWConfig->InstantMailEnabled || sModernWoWConfig->QuestsShowLowLevelAsNormal)
+        new ModernWoW_GlobalOverridesWorldScript();
 }
