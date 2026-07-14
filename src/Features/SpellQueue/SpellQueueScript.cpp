@@ -25,6 +25,7 @@
 #include "Player.h"
 #include "Spell.h"
 #include "SpellInfo.h"
+#include "SpellMgr.h"
 #include "ObjectAccessor.h"
 #include "Log.h"
 #include <unordered_map>
@@ -80,7 +81,7 @@ public:
         if (player->IsNonMeleeSpellCast(false))
             return;
 
-        if (player->GetGlobalCooldownMgr().HasGlobalCooldown(player,
+        if (player->GetGlobalCooldownMgr().HasGlobalCooldown(
             sSpellMgr->GetSpellInfo(queued.spellId)))
             return;
 
@@ -130,7 +131,7 @@ public:
             return;
 
         // Check if we're still on GCD
-        if (!player->GetGlobalCooldownMgr().HasGlobalCooldown(player, spellInfo))
+        if (!player->GetGlobalCooldownMgr().HasGlobalCooldown(spellInfo))
             return;
 
         // Queue the spell

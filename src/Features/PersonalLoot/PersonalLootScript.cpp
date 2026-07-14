@@ -88,7 +88,7 @@ public:
         if (!ShouldUsePersonalLoot(player->GetMap()))
             return;
 
-        Group* group = player->GetGroup();
+        Group const* group = player->GetGroup();
         if (!group)
             return; // Solo players use normal loot
 

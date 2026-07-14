@@ -91,7 +91,9 @@ public:
             return;
 
         // Deposit to guild bank
-        guild->HandleMemberDepositMoney(player->GetSession(), cashFlow, true /*skipGuildCheck*/);
+        CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
+        guild->ModifyBankMoney(trans, cashFlow, true);
+        CharacterDatabase.CommitTransaction(trans);
 
         LOG_DEBUG("module", "mod-modernWoW GuildPerks: CashFlow {} copper to guild {} for player {}",
             cashFlow, guildId, player->GetName());
