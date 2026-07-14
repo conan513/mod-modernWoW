@@ -1,5 +1,7 @@
 # mod-modernWoW
 
+![mod-modernWoW Banner](banner.png)
+
 **AzerothCore module** — Modernizes the WoW 3.3.5 (WotLK) experience to feel closer to current-generation WoW.
 
 ## Features

@@ -3,40 +3,45 @@
  * Copyright (C) 2024
  *
  * ============================================================================
- * DESIGN PHILOSOPHY — miért NEM skálázzuk a creature szintjét?
+ * DESIGN PHILOSOPHY — why we DO NOT scale the creature's actual level in the world
  * ============================================================================
  *
- * Az eredeti megközelítés (creature szintje = player szintje) alapvetően hibás
- * vegyes szintű party esetén:
+ * The old approach (creature level = player level) is fundamentally broken
+ * in mixed-level groups:
  *
- *   Példa: lvl60 + lvl33 bemennek egy lvl15-ös zónába questelni.
- *   - Ha creature-t 60-ra skálázzuk: a lvl33-as számára beteljesíthetetlen
- *   - Ha 33-ra skálázzuk: a lvl60-as mégis one-shot-olja
- *   - Ha 15-re hagyjuk: mindenki trivializálja
+ *   Example: lvl 60 + lvl 33 questing together in a lvl 15 zone.
+ *   - If creature scales to 60: impossible for the lvl 33 player.
+ *   - If creature scales to 33: the lvl 60 player one-shots it.
+ *   - If creature stays at 15: both players trivialize the content.
  *
- * A HELYES megközelítés (retail Chromie Time / War Within Content Scaling):
+ * The CORRECT approach (Retail content scaling / Chromie Time):
  *
- *   A creature MEGTARTJA a zóna eredeti szintjét (template szint).
- *   Ehelyett minden egyes játékos damage-ét KÜLÖN skálázzuk mindkét irányban:
+ *   The creature keeps its zone-intended template level (template level).
+ *   Instead, we scale the damage of each player INDIVIDUALLY in both directions:
  *
  *   Player → Creature damage:
  *     scale = (creatureBaseLevel / playerLevel)^POWER_EXPONENT
- *     → magasabb szintű játékos kevesebbet üt (mint ha azonos szintű lenne)
+ *     → higher-level player deals less damage (as if downscaled to the zone level)
  *
  *   Creature → Player damage:
  *     scale = (playerLevel / creatureBaseLevel)^POWER_EXPONENT
- *     → magasabb szintű játékos nagyobb ütéseket kap (HP-arányosan)
+ *     → higher-level player takes more damage (proportionally to their health pool)
  *
  *   XP:
- *     A standard motor nullát adna (grey mob). Felülírjuk, hogy a játékos
- *     szintjéhez arányos XP-t adjon a content completion érzéséhez.
+ *     The standard engine would award 0 XP for a grey mob. We override this
+ *     to calculate a synthetic XP reward so progression remains active.
  *
- * EREDMÉNY a vegyes party esetén:
- *   - lvl60 + lvl33, creature lvl15:
- *     - A lvl60 úgy üt és úgy kapja az ütéseket, mintha lvl15-ös lenne
- *     - A lvl33 úgy üt és úgy kapja az ütéseket, mintha lvl15-ös lenne
- *     - Mindenki UGYANOLYAN kihívást tapasztal, mint egy valódi lvl15-ös
- *     - Mindenki kap értelmes XP-t
+ *   Dynamic Level Presentation (Visual level override):
+ *     We patch the UNIT_FIELD_LEVEL value in serialized update packets so that
+ *     each player sees the creature at their own level. This keeps target frames
+ *     and nameplates yellow (matching the player's level) instead of grey.
+ *
+ * MIXED PARTY RESULT:
+ *   - lvl 60 + lvl 33, creature lvl 15:
+ *     - The lvl 60 player deals and takes damage as if they were lvl 15.
+ *     - The lvl 33 player deals and takes damage as if they were lvl 15.
+ *     - Both players experience the SAME relative challenge.
+ *     - Both players receive appropriate XP rewards.
  *
  * ============================================================================
  * DAMAGE SCALING FORMULA
@@ -46,22 +51,22 @@
  *
  * Player → Creature:
  *   playerLevel > contentLevel → outScale = (contentLevel/playerLevel)^1.5
- *   playerLevel ≤ contentLevel → outScale = 1.0 (ne buffoljuk az alacsony szintűt)
+ *   playerLevel ≤ contentLevel → outScale = 1.0 (do not buff lower-level players)
  *
  * Creature → Player:
  *   playerLevel > contentLevel → inScale = (playerLevel/contentLevel)^1.5
  *   playerLevel ≤ contentLevel → inScale = 1.0
  *
- * contentLevel = a creature template-jének minlevel értéke (zóna szintje)
+ * contentLevel = the creature template's minlevel (zone-intended level)
  *
  * ============================================================================
  * SKIPS
  * ============================================================================
  * - Pets, totems, triggers
  * - World bosses
- * - Raid instance-ok (ha ExcludeRaids = 1)
- * - Blacklistelt map-ek
- * - Ha a player szintje ≤ creature template szintje (nincs mit skálázni)
+ * - Raid instances (if ExcludeRaids = 1)
+ * - Blacklisted map IDs
+ * - If player level ≤ creature template level (no scaling needed)
  */
 
 #include "CreatureScalingScript.h"
@@ -77,15 +82,15 @@
 #include <cmath>
 
 // ---------------------------------------------------------------------------
-// Konstans: a damage skálázás kitevője.
-// 1.5 = közelíti a retail viselkedést.
-// Kisebb érték → lazább skálázás (high-level könnyebben boldogul)
-// Nagyobb érték → szigorúbb skálázás (high-level szinte teljesen leszorul)
+// Tuning constant: damage scaling exponent.
+// 1.5 matches the approximate feel of retail scaling.
+// Lower value  → looser scaling (high-level players have an advantage)
+// Higher value → stricter scaling (forces closer parity to zone intended stats)
 // ---------------------------------------------------------------------------
 static constexpr float SCALE_EXPONENT = 1.5f;
 
 // ---------------------------------------------------------------------------
-// Helper: kizárt-e a map a skálázásból?
+// Helper: check if a map is excluded from content scaling
 // ---------------------------------------------------------------------------
 static bool IsMapExcluded(uint32 mapId, Map const* map)
 {
@@ -100,9 +105,8 @@ static bool IsMapExcluded(uint32 mapId, Map const* map)
 }
 
 // ---------------------------------------------------------------------------
-// Helper: visszaadja a creature "content szintjét" (zóna-szint)
-// Ez a template minlevel értéke — azt tükrözi, hogy a tervező hány szintűnek
-// szánta az adott creature-t a zónában.
+// Helper: get the creature's zone-intended level
+// This uses the template level as the baseline.
 // ---------------------------------------------------------------------------
 static uint8 GetContentLevel(Creature const* creature)
 {
@@ -110,18 +114,14 @@ static uint8 GetContentLevel(Creature const* creature)
     if (!tmpl)
         return creature->GetLevel();
 
-    // Ha a template range-es (min/max), a közepét vesszük content szintnek
+    // If template has a range, use the average
     uint8 minL = tmpl->minlevel;
     uint8 maxL = tmpl->maxlevel;
     return static_cast<uint8>((static_cast<uint16>(minL) + maxL) / 2);
 }
 
 // ---------------------------------------------------------------------------
-// Helper: kiszámítja a kifelé irányuló damage skálát egy adott
-// player vs content szint arány esetén.
-//
-// Ha a player magasabb szintű mint a content → visszaadja a csökkentő faktort
-// Ha a player alacsonyabb vagy egyenlő → 1.0 (nincs módosítás)
+// Helper: calculate outgoing damage scale factor (player -> creature)
 // ---------------------------------------------------------------------------
 static float CalcOutgoingScale(uint8 playerLevel, uint8 contentLevel)
 {
@@ -133,10 +133,7 @@ static float CalcOutgoingScale(uint8 playerLevel, uint8 contentLevel)
 }
 
 // ---------------------------------------------------------------------------
-// Helper: kiszámítja a bejövő damage skálát (creature → player)
-//
-// Ha a player magasabb szintű → nagyobb ütéseket kap (relatívan)
-// Ha alacsonyabb vagy egyenlő → 1.0
+// Helper: calculate incoming damage scale factor (creature -> player)
 // ---------------------------------------------------------------------------
 static float CalcIncomingScale(uint8 playerLevel, uint8 contentLevel)
 {
@@ -148,7 +145,7 @@ static float CalcIncomingScale(uint8 playerLevel, uint8 contentLevel)
 }
 
 // ---------------------------------------------------------------------------
-// Helper: creature-ről meghatározzuk, hogy skálázható-e
+// Helper: check if creature is eligible for scaling
 // ---------------------------------------------------------------------------
 static bool IsCreatureScalable(Creature const* creature)
 {
@@ -162,7 +159,7 @@ static bool IsCreatureScalable(Creature const* creature)
     if (!tmpl)
         return false;
 
-    // World boss-okat nem skálázzuk
+    // Do not scale world bosses
     if (tmpl->rank == CREATURE_ELITE_WORLDBOSS)
         return false;
 
@@ -174,15 +171,7 @@ static bool IsCreatureScalable(Creature const* creature)
 }
 
 // ---------------------------------------------------------------------------
-// UnitScript — a fő skálázási logika a damage hook-okban
-//
-// Ez a script kezeli MINDKÉT irányt:
-//   1. Player → Creature damage csökkentése (ha a player magasabb szintű)
-//   2. Creature → Player damage növelése (ha a player magasabb szintű)
-//
-// Vegyes szintű party esetén:
-//   Mindkét játékos SAJÁT szintjéhez képest kapja a skálázást →
-//   mindenki ugyanolyan kihívást érez, szinttől függetlenül.
+// UnitScript — Core content scaling logic in damage hooks
 // ---------------------------------------------------------------------------
 class ModernWoW_ContentScaleDamageScript : public UnitScript
 {
@@ -190,8 +179,7 @@ public:
     ModernWoW_ContentScaleDamageScript() : UnitScript("ModernWoW_ContentScaleDamageScript") {}
 
     // -----------------------------------------------------------------------
-    // Melee: Player → Creature (csökkentjük a high-level player damage-ét)
-    //        Creature → Player (növeljük a bejövő damage-t a high-level playernek)
+    // Melee Damage
     // -----------------------------------------------------------------------
     void ModifyMeleeDamage(Unit* target, Unit* attacker, uint32& damage) override
     {
@@ -201,9 +189,9 @@ public:
         if (damage == 0)
             return;
 
-        // ESET 1: Player ütötte a creature-t
+        // Player → Creature
         if (attacker && attacker->GetTypeId() == TYPEID_PLAYER &&
-            target  && target->GetTypeId()   == TYPEID_UNIT)
+            target   && target->GetTypeId()   == TYPEID_UNIT)
         {
             Creature* creature = target->ToCreature();
             if (!IsCreatureScalable(creature))
@@ -221,7 +209,7 @@ public:
                     attacker->GetName(), playerLevel, creature->GetEntry(), contentLevel, scale, damage);
             }
         }
-        // ESET 2: Creature ütötte a playert
+        // Creature → Player
         else if (attacker && attacker->GetTypeId() == TYPEID_UNIT &&
                  target   && target->GetTypeId()   == TYPEID_PLAYER)
         {
@@ -244,7 +232,7 @@ public:
     }
 
     // -----------------------------------------------------------------------
-    // Spell damage: ugyanaz a logika mint melee-nél
+    // Spell Damage
     // -----------------------------------------------------------------------
     void ModifySpellDamageTaken(Unit* target, Unit* attacker, int32& damage,
                                 SpellInfo const* /*spellInfo*/) override
@@ -255,7 +243,7 @@ public:
         if (damage == 0)
             return;
 
-        // Player → Creature spell
+        // Player → Creature
         if (attacker && attacker->GetTypeId() == TYPEID_PLAYER &&
             target   && target->GetTypeId()   == TYPEID_UNIT)
         {
@@ -270,7 +258,7 @@ public:
             if (scale < 1.0f)
                 damage = static_cast<int32>(damage * scale);
         }
-        // Creature → Player spell
+        // Creature → Player
         else if (attacker && attacker->GetTypeId() == TYPEID_UNIT &&
                  target   && target->GetTypeId()   == TYPEID_PLAYER)
         {
@@ -288,7 +276,7 @@ public:
     }
 
     // -----------------------------------------------------------------------
-    // DoT tick (pl. poison, bleed) — ugyanaz a logika
+    // DoT Tick Damage
     // -----------------------------------------------------------------------
     void ModifyPeriodicDamageAurasTick(Unit* target, Unit* attacker,
                                        uint32& damage, SpellInfo const* /*spellInfo*/) override
@@ -301,7 +289,7 @@ public:
 
         // Player DoT → Creature
         if (attacker->GetTypeId() == TYPEID_PLAYER &&
-            target  && target->GetTypeId() == TYPEID_UNIT)
+            target   && target->GetTypeId()   == TYPEID_UNIT)
         {
             Creature* creature = target->ToCreature();
             if (!IsCreatureScalable(creature))
@@ -313,21 +301,20 @@ public:
         }
         // Creature DoT → Player
         else if (attacker->GetTypeId() == TYPEID_UNIT &&
-                 target && target->GetTypeId() == TYPEID_PLAYER)
+                 target   && target->GetTypeId()   == TYPEID_PLAYER)
         {
             Creature* creature = attacker->ToCreature();
-            if (!creature)
-                return;
-            if (!IsCreatureScalable(creature))
+            if (!creature || !IsCreatureScalable(creature))
                 return;
 
             float scale = CalcIncomingScale(target->GetLevel(), GetContentLevel(creature));
             if (scale > 1.0f)
                 damage = static_cast<uint32>(damage * scale);
+        }
     }
 
     // -----------------------------------------------------------------------
-    // Healing (opcionális)
+    // Healing Received
     // -----------------------------------------------------------------------
     void ModifyHealReceived(Unit* /*target*/, Unit* /*healer*/, uint32& /*heal*/,
                             SpellInfo const* /*spellInfo*/) override
@@ -375,13 +362,8 @@ public:
 
 // ---------------------------------------------------------------------------
 // FormulaScript — XP override
-//
-// Ha a creature template szintje alacsonyabb mint a player szintje mínusz
-// grey threshold, a motor 0 XP-t adna. Mi helyette adunk értelmes XP-t,
-// arányosan a player szintjéhez, így megmarad a szintlépési progresszió.
-//
-// Formula: XP = normalXP * (contentLevel / playerLevel) * XP_SCALE_FACTOR
-// (normalXP = amit egy saját szintű creature megöléséért kapna)
+// If content is too low level (grey mob), calculate synthetic XP reward
+// so progression remains active.
 // ---------------------------------------------------------------------------
 class ModernWoW_ContentScaleXPScript : public FormulaScript
 {
@@ -409,23 +391,16 @@ public:
         uint8 playerLevel  = player->GetLevel();
         uint8 contentLevel = GetContentLevel(creature);
 
-        // Ha a creature már nem grey (player szintjéhez közel), ne avatkozzunk be
-        // A grey threshold kb. playerLevel - 8 (szinttől függően változik)
+        // Do not interfere if the creature is not grey (e.g. within 8 levels)
         int32 greyThreshold = static_cast<int32>(playerLevel) - 8;
         if (static_cast<int32>(contentLevel) >= greyThreshold)
-            return; // Motor természetesen kezeli
+            return;
 
-        // Creature grey lenne → override XP
-        // Adjuk meg a "content completion" XP-t:
-        // Ez arányos a content szintjéhez képesti normál XP-val,
-        // de skálázva a player szintjéhez hogy ne legyen elhanyagolható
+        // Force synthetic XP for grey mobs to preserve leveling flow
         if (gain == 0)
         {
-            // Compute synthetic XP: kb. 150 XP * playerLevel / 60 * contentFraction
-            float contentFraction = static_cast<float>(contentLevel) /
-                                    static_cast<float>(playerLevel);
-            uint32 syntheticXP = static_cast<uint32>(
-                150.0f * static_cast<float>(playerLevel) * contentFraction);
+            float contentFraction = static_cast<float>(contentLevel) / static_cast<float>(playerLevel);
+            uint32 syntheticXP = static_cast<uint32>(150.0f * static_cast<float>(playerLevel) * contentFraction);
             gain = syntheticXP;
 
             LOG_DEBUG("module.scaling",
@@ -436,14 +411,7 @@ public:
 };
 
 // ---------------------------------------------------------------------------
-// AllCreatureScript — szint megtartása (csak ellenőrzés)
-//
-// Ebben a megközelítésben NEM változtatjuk meg a creature szintjét.
-// A creature a template szintjén marad — csak a damage-et skálázzuk.
-//
-// KIVÉTEL: Ha a config DynScaleMinLevel beállítja, hogy a creature legalább
-// X szintű legyen (pl. a teljesen triviális 1-es szintű critter-ek ne
-// akadályozzák az élményt), akkor felülírjuk az alsó határt.
+// AllCreatureScript — enforce minimum level clamp
 // ---------------------------------------------------------------------------
 class ModernWoW_ContentScaleCreatureScript : public AllCreatureScript
 {
@@ -470,19 +438,15 @@ public:
         if (IsMapExcluded(creature->GetMapId(), map))
             return;
 
-        // Csak az abszolút minimumot alkalmazzuk (pl. lvl1 critter-ek ne
-        // akadályozzák a damage skálázást szélső esetekben)
+        // Enforce the configured minimum level floor
         uint8 minAllowed = sModernWoWConfig->DynScaleMinLevel;
         if (level < minAllowed)
             level = minAllowed;
-
-        // Különben: megtartjuk a template szintjét — a damage hook-ok végzik
-        // a valódi skálázást per-player alapon.
     }
 };
 
 // ---------------------------------------------------------------------------
-// Regisztráció
+// Script Registration
 // ---------------------------------------------------------------------------
 void AddModernWoW_DynamicScalingScripts()
 {
