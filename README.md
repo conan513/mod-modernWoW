@@ -68,6 +68,8 @@ WoW/Interface/AddOns/ModernWoW/
 
 Enable "ModernWoW" in the addon list at the character select screen.
 
+![ModernWoW Addon UI Mockup](addon.png)
+
 ## Configuration
 
 See [`conf/mod-modernwow.conf.dist`](conf/mod-modernwow.conf.dist) for all options.
