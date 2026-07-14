@@ -324,32 +324,52 @@ public:
             float scale = CalcIncomingScale(target->GetLevel(), GetContentLevel(creature));
             if (scale > 1.0f)
                 damage = static_cast<uint32>(damage * scale);
-        }
     }
 
     // -----------------------------------------------------------------------
-    // Healing (opcionális): ha a player magasabb szintű, a heals is arányosan
-    // erősebbek. Kissé csökkentjük, hogy ne gyógyítsa ki magát triviálisan.
+    // Healing (opcionális)
     // -----------------------------------------------------------------------
-    void ModifyHealReceived(Unit* target, Unit* healer, uint32& heal,
+    void ModifyHealReceived(Unit* /*target*/, Unit* /*healer*/, uint32& /*heal*/,
                             SpellInfo const* /*spellInfo*/) override
+    {
+    }
+
+    // -----------------------------------------------------------------------
+    // DYNAMIC LEVEL PRESENTATION (Make creatures appear at player's level)
+    // -----------------------------------------------------------------------
+    bool ShouldTrackValuesUpdatePosByIndex(Unit const* /*unit*/, uint8 /*updateType*/, uint16 index) override
+    {
+        if (!sModernWoWConfig->Enabled || !sModernWoWConfig->DynScaleEnabled)
+            return false;
+
+        return (index == UNIT_FIELD_LEVEL);
+    }
+
+    void OnPatchValuesUpdate(Unit const* unit, ByteBuffer& valuesUpdateBuf, BuildValuesCachePosPointers& posPointers, Player* target) override
     {
         if (!sModernWoWConfig->Enabled || !sModernWoWConfig->DynScaleEnabled)
             return;
 
-        // Csak player → player healing skálázás (ne csökkentsük saját gyógyulást
-        // ha creature-ből jön, pl. potion)
-        if (!healer || healer->GetTypeId() != TYPEID_PLAYER)
-            return;
-        if (!target || target->GetTypeId() != TYPEID_PLAYER)
+        if (!unit || !target)
             return;
 
-        // Nem skálázzuk a self-healt (pl. bandage), mert az nem combat-dependent
-        // Kizárólag ha van a közelben aktív, skálázott creature
-        // (egyszerűsítés: mindig csökkentjük ha a healer magasabb szintű mint a
-        //  zone szintje — de ehhez zone szintet kellene tudni player kontextusból)
-        // Egyelőre: healing skálázás kikapcsolva (csak damage-t skálázzuk)
-        (void)heal;
+        Creature const* creature = unit->ToCreature();
+        if (!creature || !IsCreatureScalable(creature))
+            return;
+
+        auto it = posPointers.other.find(UNIT_FIELD_LEVEL);
+        if (it != posPointers.other.end())
+        {
+            uint32 levelPos = it->second;
+            uint8 playerLevel = target->GetLevel();
+
+            // Clamp target level to dynamic scaling bounds
+            uint8 targetLevel = std::clamp<uint8>(playerLevel,
+                sModernWoWConfig->DynScaleMinLevel,
+                sModernWoWConfig->DynScaleMaxLevel);
+
+            valuesUpdateBuf.put<uint32>(levelPos, uint32(targetLevel));
+        }
     }
 };
 
