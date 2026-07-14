@@ -60,7 +60,7 @@ Edit `mod-modernwow.conf` to enable/disable features as needed.
 
 ### 4. WoW Addon (Client-Side)
 
-Copy the `addon/` folder to your WoW client's `Interface/AddOns/` directory:
+Copy the `addon/ModernWoW` folder to your WoW client's `Interface/AddOns/` directory:
 
 ```
 WoW/Interface/AddOns/ModernWoW/
