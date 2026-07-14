@@ -18,11 +18,14 @@
 #include "WorldQuestMgr.h"
 #include "ModernWoW_Config.h"
 #include "DatabaseEnv.h"
+#include "QueryResult.h"
+#include "Field.h"
 #include "GameTime.h"
 #include "Random.h"
 #include "Log.h"
 #include <algorithm>
 #include <ctime>
+#include <random>
 
 WorldQuestMgr* WorldQuestMgr::instance()
 {

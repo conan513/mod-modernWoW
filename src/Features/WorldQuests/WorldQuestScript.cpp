@@ -11,7 +11,7 @@
 #include "ModernWoW_Config.h"
 #include "ScriptMgr.h"
 #include "Player.h"
-#include "Quest.h"
+#include "QuestDef.h"
 #include "Chat.h"
 #include "GameTime.h"
 #include "Log.h"

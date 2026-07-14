@@ -92,7 +92,7 @@ public:
 
         // Deposit to guild bank
         CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
-        guild->ModifyBankMoney(trans, cashFlow, true);
+        (void)guild->ModifyBankMoney(trans, cashFlow, true);
         CharacterDatabase.CommitTransaction(trans);
 
         LOG_DEBUG("module", "mod-modernWoW GuildPerks: CashFlow {} copper to guild {} for player {}",
