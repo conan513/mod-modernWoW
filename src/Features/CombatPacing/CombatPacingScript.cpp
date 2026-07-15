@@ -209,16 +209,18 @@ public:
         float healthMult = sModernWoWConfig->CombatPacingOOCHealthMult;
         float manaMult   = sModernWoWConfig->CombatPacingOOCManaMult;
 
+        // AzerothCore rate API: sWorld->setRate(ServerConfigs enum, float value)
+        // RATE_HEALTH and RATE_POWER_MANA are defined in WorldConfig.h
         if (healthMult > 0.0f)
         {
-            sWorld->setFloatConfig(CONFIG_RATE_HEALTH, healthMult);
+            sWorld->setRate(RATE_HEALTH, healthMult);
             LOG_DEBUG("module.combatpacing",
                 "CombatPacing: HP regen rate set to {:.1f}x", healthMult);
         }
 
         if (manaMult > 0.0f)
         {
-            sWorld->setFloatConfig(CONFIG_RATE_POWER_MANA, manaMult);
+            sWorld->setRate(RATE_POWER_MANA, manaMult);
             LOG_DEBUG("module.combatpacing",
                 "CombatPacing: Mana regen rate set to {:.1f}x", manaMult);
         }
