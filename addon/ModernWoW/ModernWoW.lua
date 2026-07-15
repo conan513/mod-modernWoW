@@ -10,7 +10,6 @@ ModernWoW.Prefix  = "MODERNWOW"
 local defaults = {
     autoLoot       = true,
     questTracker   = true,
-    damageMeter    = true,
     collections    = true,
     minimap        = { minimapPos = 200, hide = false },
 }
@@ -64,11 +63,6 @@ local function OnAddonMessage(prefix, message, channel, sender)
         -- World quest list update from server
         if ModernWoW.QuestTracker then
             ModernWoW.QuestTracker:UpdateWorldQuests(data)
-        end
-    elseif cmd == "DPS" then
-        -- DPS data from server
-        if ModernWoW.DamageMeter then
-            ModernWoW.DamageMeter:UpdateDPS(data)
         end
     elseif cmd == "PONG" then
         ModernWoW:Debug("Server ping OK")
@@ -135,13 +129,11 @@ SlashCmdList["MODERNWOW"] = function(msg)
         DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow info|r        — Show addon status")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow autoloot|r    — Toggle auto-loot")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow tracker|r     — Toggle quest tracker")
-        DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow meter|r       — Toggle damage meter")
 
     elseif cmd == "info" then
         ModernWoW:Print("Status:")
         DEFAULT_CHAT_FRAME:AddMessage("  Auto-Loot   : " .. (ModernWoW:GetSetting("autoLoot") and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
         DEFAULT_CHAT_FRAME:AddMessage("  Quest Tracker: " .. (ModernWoW:GetSetting("questTracker") and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
-        DEFAULT_CHAT_FRAME:AddMessage("  Damage Meter : " .. (ModernWoW:GetSetting("damageMeter") and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
 
     elseif cmd == "autoloot" then
         local val = not ModernWoW:GetSetting("autoLoot")
@@ -154,12 +146,6 @@ SlashCmdList["MODERNWOW"] = function(msg)
         ModernWoW:SetSetting("questTracker", val)
         ModernWoW:Print("Quest Tracker: " .. (val and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
         if ModernWoW.QuestTracker then ModernWoW.QuestTracker:SetEnabled(val) end
-
-    elseif cmd == "meter" then
-        local val = not ModernWoW:GetSetting("damageMeter")
-        ModernWoW:SetSetting("damageMeter", val)
-        ModernWoW:Print("Damage Meter: " .. (val and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
-        if ModernWoW.DamageMeter then ModernWoW.DamageMeter:SetEnabled(val) end
 
     else
         ModernWoW:Print("Unknown command. Type /mwow help")
