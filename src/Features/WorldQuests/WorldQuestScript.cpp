@@ -93,14 +93,14 @@ public:
         sWorldQuestMgr->Initialize();
     }
 
-    void OnUpdate(uint32 /*diff*/) override
+    void OnUpdate(uint32 diff) override
     {
         if (!sModernWoWConfig->Enabled || !sModernWoWConfig->WorldQuestsEnabled)
             return;
 
         // Check for daily reset every real minute (reduce overhead)
         static uint32 checkTimer = 0;
-        checkTimer += 1000; // diff is in ms but we call this once per update
+        checkTimer += diff;
         if (checkTimer < 60000)
             return;
         checkTimer = 0;

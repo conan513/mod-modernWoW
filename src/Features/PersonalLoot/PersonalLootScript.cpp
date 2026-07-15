@@ -89,13 +89,18 @@ public:
             return;
 
         Group const* group = player->GetGroup();
-        if (!group)
-            return; // Solo players use normal loot
-
-        // We only generate personal loot if there are 2+ players
-        // (solo players just get normal loot — simpler path)
-        if (group->GetMembersCount() < 2)
-            return;
+        if (!group || group->GetMembersCount() < 2)
+        {
+            // Solo player with PersonalLootSoloMult: apply bonus loot chance directly to item drop chance
+            if (sModernWoWConfig->PersonalLootSoloMult > 1.0f)
+            {
+                if (lootStoreItem->chance > 0.0f && lootStoreItem->chance < 100.0f)
+                {
+                    lootStoreItem->chance = std::min(100.0f, lootStoreItem->chance * sModernWoWConfig->PersonalLootSoloMult);
+                }
+            }
+            return; // Solo players use normal loot with boosted chance
+        }
 
         // Personal loot is handled in OnPlayerBeforeSendLoot instead.
         // Here we just mark that personal loot is needed for this creature.
@@ -129,13 +134,7 @@ public:
         Group* group = player->GetGroup();
         if (!group || group->GetMembersCount() < 2)
         {
-            // Solo player with PersonalLootSoloMult: apply bonus loot chance
-            if (sModernWoWConfig->PersonalLootSoloMult > 1.0f && !loot->items.empty())
-            {
-                // We can't easily re-roll loot here, but we can duplicate items
-                // by rolling extra chances. For simplicity we just let the natural
-                // loot table run and apply the multiplier via OnAfterRefCount.
-            }
+            // Solo player: Solo multiplier has already been applied in OnBeforeDropAddItem.
             return;
         }
 

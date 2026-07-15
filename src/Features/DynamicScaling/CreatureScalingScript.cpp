@@ -37,26 +37,6 @@
  *      A lvl 30 player fighting a lvl 1 zone takes proportionally more damage
  *      so the content remains challenging and meaningful for higher levels too.
  *
- *   3. CREATURE INCOMING DAMAGE (creature → player) is scaled based on the ratio of
- *      the player's expected HP at their level vs the creature template's base level.
- *      - playerLevelHP / contentLevelHP → higher-level player takes proportionally more.
- *
- *   4. XP:
- *      FormulaScript::OnGainCalculation is commented out in AzerothCore core.
- *      We hook OnPlayerRewardKillRewarder via PlayerScript to award synthetic XP
- *      for grey mobs so progression is never stalled.
- *
- *   5. VISUAL LEVEL (per-player packet patch):
- *      UNIT_FIELD_LEVEL is patched in outgoing update packets so each player sees
- *      the creature at their own level (yellow nameplate instead of grey).
- *
- * ============================================================================
- * MIXED PARTY EXAMPLE
- * ============================================================================
- *
- *   lvl 30 + lvl 15, questing together in a lvl 1 zone.
- *   Creature template: wolf, lvl 1, HP = 55.
- *
  *   4. XP:
  *      FormulaScript::OnGainCalculation is commented out in AzerothCore core.
  *      We hook OnPlayerRewardKillRewarder via PlayerScript to award synthetic XP
@@ -74,14 +54,14 @@
  *   Creature template: wolf, lvl 1, HP = 55.
  *
  *   lvl 15 attacks:
- *     outScale = baseHP(1) / baseHP(15) = 55/300 = 0.18
- *     → deals 50 * 0.18 = ~9 damage. Kills in ~6 hits.
+ *     outScale = baseDmg(contentLvl) / baseDmg(15)  [proportional reduction]
+ *     → deals scaled damage; kills in roughly the same hits as a lvl1 player.
  *
  *   lvl 30 attacks:
- *     outScale = baseHP(1) / baseHP(30) = 55/1100 = 0.05
- *     → deals 300 * 0.05 = ~15 damage. Kills in ~4 hits.
+ *     outScale = baseDmg(contentLvl) / baseDmg(30)  [larger reduction]
+ *     → deals scaled damage; kills in roughly the same hits as a lvl1 player.
  *
- *   RESULT: Both players kill the wolf in ~4-6 hits. TTK roughly equal.
+ *   RESULT: All players kill the wolf in ~4-6 hits. TTK roughly equal.
  *   The wolf's 55 HP remains natural. No HP inflation.
  *
  * ============================================================================
@@ -98,9 +78,12 @@
 #include "ModernWoW_Config.h"
 #include "ScriptMgr.h"
 #include "Creature.h"
+#include "LootMgr.h"
 #include "Map.h"
+#include "ObjectAccessor.h"
 #include "Player.h"
 #include "SpellInfo.h"
+#include "World.h"
 #include "Log.h"
 #include <algorithm>
 #include <cmath>
@@ -165,6 +148,30 @@ static uint32 GetBaseHPAtLevel(uint8 level, Creature const* creature)
     return creature->GetMaxHealth();
 }
 
+// Returns the creature class's expected base damage output at the given level.
+// Using BaseDamage from CreatureBaseStats gives a much more accurate proxy for
+// player combat effectiveness than HP ratios. HP grows disproportionately fast
+// at low levels (e.g. lvl1→lvl2), causing the HP-ratio formula to over-correct:
+// a higher-level player ends up needing MORE hits than a lower-level one.
+// BaseDamage tracks the same content-tier calibration as player power curves.
+// The template modifier cancels in the ratio, so it is omitted here.
+static float GetBaseDamageAtLevel(uint8 level, Creature const* creature)
+{
+    CreatureTemplate const* tmpl = creature->GetCreatureTemplate();
+    if (!tmpl)
+        return 0.0f;
+
+    CreatureBaseStats const* stats = sObjectMgr->GetCreatureBaseStats(level, tmpl->unit_class);
+    if (!stats)
+        return 0.0f;
+
+    uint32 expIdx = static_cast<uint32>(sWorld->getIntConfig(CONFIG_EXPANSION));
+    if (expIdx >= static_cast<uint32>(MAX_EXPANSIONS))
+        expIdx = static_cast<uint32>(MAX_EXPANSIONS) - 1;
+
+    return stats->BaseDamage[expIdx];
+}
+
 // Apply physical HP scaling to a creature.
 // targetLevel = the level whose baseHP we want the creature's max HP to represent.
 // Returns the scaling factor applied (or 1.0 if none).
@@ -178,7 +185,8 @@ static float ApplyCreatureHP(Creature* creature, uint8 targetLevel, uint8 conten
     if (targetHP <= currentMax || contentHP == 0)
         return 1.0f;
 
-    float hpScale = static_cast<float>(targetHP) / static_cast<float>(currentMax);
+    float hpScale = (static_cast<float>(targetHP) / static_cast<float>(currentMax))
+                    * sModernWoWConfig->DynScaleHealthMult;
     uint32 newMaxHP = static_cast<uint32>(currentMax * hpScale);
     float healthPct = creature->GetHealthPct() / 100.0f;
 
@@ -238,16 +246,27 @@ static float GetOutgoingScale(Creature* creature, uint8 playerLevel, uint8 conte
     // ------------------------------------------------------------------
     // MODE 2: Equal TTK — Damage scaled DOWN per-player to content level.
     //         Mob HP stays at template value. All players kill in ~same hits.
+    //
+    //         BUG FIX: Previously used HP ratios, which over-corrected at low
+    //         levels because HP grows faster than player damage between levels.
+    //         Now uses creature BaseDamage ratios — these scale proportionally
+    //         to player combat effectiveness within each content tier.
     // ------------------------------------------------------------------
     if (mode == 2)
     {
+        float contentDmg = GetBaseDamageAtLevel(contentLevel, creature);
+        float playerDmg  = GetBaseDamageAtLevel(playerLevel, creature);
+
+        if (playerDmg > 0.0f && contentDmg > 0.0f)
+            return contentDmg / playerDmg;
+
+        // Fallback: HP ratio (less accurate at low levels, but avoids zero-division)
         uint32 playerLevelHP  = GetBaseHPAtLevel(playerLevel, creature);
         uint32 contentLevelHP = GetBaseHPAtLevel(contentLevel, creature);
-
         if (playerLevelHP > 0 && contentLevelHP > 0)
             return static_cast<float>(contentLevelHP) / static_cast<float>(playerLevelHP);
 
-        return static_cast<float>(contentLevel) / static_cast<float>(playerLevel); // fallback
+        return static_cast<float>(contentLevel) / static_cast<float>(playerLevel);
     }
 
     // ------------------------------------------------------------------
@@ -625,6 +644,58 @@ public:
 };
 
 // ---------------------------------------------------------------------------
+// GlobalScript — Scale loot drop chances for over-leveled players (DynScaleLoot)
+// Boosts item drop chances when the player's level exceeds the content level,
+// ensuring loot remains rewarding when playing scaled-down content.
+// The boost is proportional to the level advantage, capped at 2× to avoid
+// trivializing loot. Only partial-chance items are modified (not guaranteed drops).
+// ---------------------------------------------------------------------------
+class ModernWoW_LootScaleGlobalScript : public GlobalScript
+{
+public:
+    ModernWoW_LootScaleGlobalScript() : GlobalScript("ModernWoW_LootScaleGlobalScript") {}
+
+    void OnBeforeDropAddItem(Player const* player, Loot& loot, bool /*canRate*/,
+                             uint16 /*lootMode*/, LootStoreItem* lootStoreItem,
+                             LootStore const& /*store*/) override
+    {
+        if (!sModernWoWConfig->Enabled || !sModernWoWConfig->DynScaleEnabled || !sModernWoWConfig->DynScaleLoot)
+            return;
+
+        if (!player || !lootStoreItem)
+            return;
+
+        // Only boost partial-chance items; skip guaranteed and zero-chance drops
+        if (lootStoreItem->chance <= 0.0f || lootStoreItem->chance >= 100.0f)
+            return;
+
+        if (!loot.sourceWorldObjectGUID.IsCreatureOrVehicle())
+            return;
+
+        Creature* creature = ObjectAccessor::GetCreature(*player, loot.sourceWorldObjectGUID);
+        if (!creature || !IsCreatureScalable(creature))
+            return;
+
+        uint8 playerLevel  = player->GetLevel();
+        uint8 contentLevel = GetContentLevel(creature);
+
+        if (playerLevel <= contentLevel)
+            return;
+
+        // Boost proportional to level advantage, capped at 2× to prevent trivialization
+        float boost = std::min(
+            static_cast<float>(playerLevel) / static_cast<float>(std::max(contentLevel, uint8(1))),
+            2.0f);
+
+        lootStoreItem->chance = std::min(100.0f, lootStoreItem->chance * boost);
+
+        LOG_DEBUG("module.scaling",
+            "DynScaleLoot: Player({}) lvl{} vs contentLvl{} → drop chance boosted to {:.1f}% (x{:.2f})",
+            player->GetName(), playerLevel, contentLevel, lootStoreItem->chance, boost);
+    }
+};
+
+// ---------------------------------------------------------------------------
 // Script Registration
 // ---------------------------------------------------------------------------
 void AddModernWoW_DynamicScalingScripts()
@@ -637,4 +708,7 @@ void AddModernWoW_DynamicScalingScripts()
 
     if (sModernWoWConfig->DynScaleXP)
         new ModernWoW_ContentScaleXPScript();
+
+    if (sModernWoWConfig->DynScaleLoot)
+        new ModernWoW_LootScaleGlobalScript();
 }

@@ -19,8 +19,10 @@
 #include "Player.h"
 #include "DatabaseEnv.h"
 #include "Chat.h"
+#include "LootMgr.h"
 #include "Log.h"
 #include <unordered_set>
+#include <algorithm>
 
 // Cache of account IDs that have at least one max-level character
 static std::unordered_set<uint32> gCatchUpAccounts;
@@ -126,6 +128,43 @@ public:
     }
 };
 
+// ---------------------------------------------------------------------------
+// GlobalScript — apply loot chance boost for catch-up characters
+// ---------------------------------------------------------------------------
+class ModernWoW_CatchUpLootScript : public GlobalScript
+{
+public:
+    ModernWoW_CatchUpLootScript() : GlobalScript("ModernWoW_CatchUpLootScript") {}
+
+    void OnBeforeDropAddItem(Player const* player, Loot& /*loot*/, bool /*canRate*/,
+                             uint16 /*lootMode*/, LootStoreItem* lootStoreItem,
+                             LootStore const& /*store*/) override
+    {
+        if (!sModernWoWConfig->Enabled || !sModernWoWConfig->CatchUpEnabled || !sModernWoWConfig->CatchUpBetterLoot)
+            return;
+
+        if (!player || !lootStoreItem)
+            return;
+
+        if (lootStoreItem->chance <= 0.0f || lootStoreItem->chance >= 100.0f)
+            return;
+
+        uint32 accountId = player->GetSession()->GetAccountId();
+        if (gCatchUpAccounts.count(accountId) == 0)
+            return;
+
+        ItemTemplate const* proto = sObjectMgr->GetItemTemplate(lootStoreItem->itemid);
+        if (!proto || proto->Quality < 2) // 2 = Uncommon, 3 = Rare, 4 = Epic, 5 = Legendary
+            return;
+
+        // Apply a 1.25x (25% boost) to the drop chance of Uncommon or better items for catch-up characters
+        lootStoreItem->chance = std::min(100.0f, lootStoreItem->chance * 1.25f);
+
+        LOG_DEBUG("module", "mod-modernWoW CatchUpLoot: Player {} (account {}) gets catch-up loot bonus for item {} (new chance: {:.1f}%)",
+            player->GetName(), accountId, lootStoreItem->itemid, lootStoreItem->chance);
+    }
+};
+
 void AddModernWoW_CatchUpScripts()
 {
     if (!sModernWoWConfig->CatchUpEnabled)
@@ -133,4 +172,7 @@ void AddModernWoW_CatchUpScripts()
 
     new ModernWoW_CatchUpPlayerScript();
     new ModernWoW_CatchUpFormulaScript();
+
+    if (sModernWoWConfig->CatchUpBetterLoot)
+        new ModernWoW_CatchUpLootScript();
 }
