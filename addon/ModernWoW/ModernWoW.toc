@@ -12,3 +12,7 @@ ModernWoW.lua
 
 ## Feature modules
 Modules\AutoLoot.lua
+Modules\MythicTimer.lua
+Modules\MythicDashboard.lua
+
+

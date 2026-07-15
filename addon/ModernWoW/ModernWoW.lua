@@ -46,6 +46,12 @@ end
 -- Addon message channel (server <-> addon communication)
 -- ============================================================
 
+ModernWoW.callbacks = {}
+
+function ModernWoW:RegisterCallback(cmd, callback)
+    self.callbacks[cmd] = callback
+end
+
 function ModernWoW:SendMessage(msg)
     SendAddonMessage(self.Prefix, msg, "WHISPER", UnitName("player"))
 end
@@ -59,6 +65,10 @@ local function OnAddonMessage(prefix, message, channel, sender)
 
     if cmd == "PONG" then
         ModernWoW:Debug("Server ping OK")
+    end
+
+    if ModernWoW.callbacks[cmd] then
+        ModernWoW.callbacks[cmd](data)
     end
 end
 
@@ -121,6 +131,8 @@ SlashCmdList["MODERNWOW"] = function(msg)
         ModernWoW:Print("Commands:")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow info|r        — Show addon status")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow autoloot|r    — Toggle auto-loot")
+        DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow vault|r       — Open Mythic+ Vault Dashboard")
+        DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow mythic|r      — Open Mythic+ Vault Dashboard")
 
     elseif cmd == "info" then
         ModernWoW:Print("Status:")
@@ -131,6 +143,11 @@ SlashCmdList["MODERNWOW"] = function(msg)
         ModernWoW:SetSetting("autoLoot", val)
         ModernWoW:Print("Auto-Loot: " .. (val and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
         if ModernWoW.AutoLoot then ModernWoW.AutoLoot:SetEnabled(val) end
+
+    elseif cmd == "vault" or cmd == "mythic" then
+        if ModernWoW.MythicDashboard then
+            ModernWoW.MythicDashboard:Toggle()
+        end
 
     else
         ModernWoW:Print("Unknown command. Type /mwow help")
