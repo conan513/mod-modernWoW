@@ -44,6 +44,29 @@ ModernWoW.AutoLoot.Gold = 1
 # Default: 1 (enabled)
 ModernWoW.DynamicScaling.Enable = 1
 
+# Scaling mode — determines how combat is balanced between players and creatures
+#
+# Mode 1 — Real Numbers (HP Upscaling):
+#   Creature HP is scaled UP to the highest-level player attacking it.
+#   Player outgoing damage is NOT modified — players always see their real numbers.
+#   Higher-level players kill the mob faster than lower-level players.
+#   Best for: servers where character power progression should feel meaningful.
+#
+# Mode 2 — Equal TTK (Damage Downscaling):
+#   Creature HP stays at template value. Each player's damage is scaled DOWN
+#   per-player using CreatureBaseStats ratios so all players kill the mob in
+#   roughly the same number of hits. Similar to classic Chromie Time zone scaling.
+#   Best for: mixed-level groups questing together on equal footing.
+#
+# Mode 3 — Compromise (Party Average):
+#   Creature HP is scaled to the average level of the attacking players.
+#   Each player's damage is adjusted relative to that average HP pool.
+#   Higher-level players contribute more, but not overwhelmingly so.
+#   Best for: a middle ground between modes 1 and 2.
+#
+# Default: 2
+ModernWoW.DynamicScaling.Mode = 2
+
 # Minimum creature level (floor) - do not scale below this
 # Default: 1
 ModernWoW.DynamicScaling.MinLevel = 1

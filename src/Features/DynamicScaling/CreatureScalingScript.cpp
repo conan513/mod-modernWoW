@@ -1,63 +1,88 @@
 /*
- * mod-modernWoW — Dynamic Creature Scaling (Chromie Time / Content Scaling)
+ * mod-modernWoW — Dynamic Creature Scaling (Chromie Time / Zone Scaling style)
  * Copyright (C) 2024
  *
  * ============================================================================
- * DESIGN PHILOSOPHY — why we DO NOT scale the creature's actual level in the world
+ * DESIGN PHILOSOPHY — Per-player downscaling for equal time-to-kill in parties
  * ============================================================================
  *
- * The old approach (creature level = player level) is fundamentally broken
- * in mixed-level groups:
+ * GOAL: Every player in a party — regardless of level — kills any given mob in
+ * roughly the same number of hits. This enables mixed-level groups to quest
+ * together naturally, mirroring WoW's classic Chromie Time / zone scaling feel.
  *
- *   Example: lvl 60 + lvl 33 questing together in a lvl 15 zone.
- *   - If creature scales to 60: impossible for the lvl 33 player.
- *   - If creature scales to 33: the lvl 60 player one-shots it.
- *   - If creature stays at 15: both players trivialize the content.
+ * HOW IT WORKS:
  *
- * The CORRECT approach (Retail content scaling / Chromie Time):
+ *   1. CREATURE HP is NOT modified. The mob keeps its template HP at all times.
+ *      This avoids per-player HP pool problems in shared-world AoE situations.
  *
- *   The creature keeps its zone-intended template level (template level).
- *   Instead, we scale the damage of each player INDIVIDUALLY in both directions:
+ *   2. PLAYER OUTGOING DAMAGE is scaled DOWN per-player using the ratio of
+ *      creature base health stats at the content level vs the player's level:
  *
- *   Player → Creature damage:
- *     scale = (creatureBaseLevel / playerLevel)^POWER_EXPONENT
- *     → higher-level player deals less damage (as if downscaled to the zone level)
+ *        outScale = GetBaseHP(contentLevel) / GetBaseHP(playerLevel)
  *
- *   Creature → Player damage:
- *     scale = (playerLevel / creatureBaseLevel)^POWER_EXPONENT
- *     → higher-level player takes more damage (proportionally to their health pool)
+ *      This is derived from the actual CreatureBaseStats database, so it exactly
+ *      matches the WotLK expansion's own stat progression curves.
  *
- *   XP:
- *     The standard engine would award 0 XP for a grey mob. We override this
- *     to calculate a synthetic XP reward so progression remains active.
+ *      Examples (wolf, contentLevel = 1, HP = 55):
+ *        lvl  1 → outScale = 55/55   = 1.00  → unscaled, full damage
+ *        lvl 15 → outScale = 55/300  = 0.18  → ~9 damage per hit, ~6 hits to kill
+ *        lvl 30 → outScale = 55/1100 = 0.05  → ~15 damage per hit, ~4 hits to kill
  *
- *   Dynamic Level Presentation (Visual level override):
- *     We patch the UNIT_FIELD_LEVEL value in serialized update packets so that
- *     each player sees the creature at their own level. This keeps target frames
- *     and nameplates yellow (matching the player's level) instead of grey.
+ *      Both players kill in ~4-6 hits regardless of level gap. TTK is equal.
  *
- * MIXED PARTY RESULT:
- *   - lvl 60 + lvl 33, creature lvl 15:
- *     - The lvl 60 player deals and takes damage as if they were lvl 15.
- *     - The lvl 33 player deals and takes damage as if they were lvl 15.
- *     - Both players experience the SAME relative challenge.
- *     - Both players receive appropriate XP rewards.
+ *   3. CREATURE INCOMING DAMAGE (creature → player) is scaled UP per-player:
+ *
+ *        inScale = GetBaseHP(playerLevel) / GetBaseHP(contentLevel)
+ *
+ *      A lvl 30 player fighting a lvl 1 zone takes proportionally more damage
+ *      so the content remains challenging and meaningful for higher levels too.
+ *
+ *   3. CREATURE INCOMING DAMAGE (creature → player) is scaled based on the ratio of
+ *      the player's expected HP at their level vs the creature template's base level.
+ *      - playerLevelHP / contentLevelHP → higher-level player takes proportionally more.
+ *
+ *   4. XP:
+ *      FormulaScript::OnGainCalculation is commented out in AzerothCore core.
+ *      We hook OnPlayerRewardKillRewarder via PlayerScript to award synthetic XP
+ *      for grey mobs so progression is never stalled.
+ *
+ *   5. VISUAL LEVEL (per-player packet patch):
+ *      UNIT_FIELD_LEVEL is patched in outgoing update packets so each player sees
+ *      the creature at their own level (yellow nameplate instead of grey).
  *
  * ============================================================================
- * DAMAGE SCALING FORMULA
+ * MIXED PARTY EXAMPLE
  * ============================================================================
  *
- * POWER_EXPONENT = 1.5 (tunable via config)
+ *   lvl 30 + lvl 15, questing together in a lvl 1 zone.
+ *   Creature template: wolf, lvl 1, HP = 55.
  *
- * Player → Creature:
- *   playerLevel > contentLevel → outScale = (contentLevel/playerLevel)^1.5
- *   playerLevel ≤ contentLevel → outScale = 1.0 (do not buff lower-level players)
+ *   4. XP:
+ *      FormulaScript::OnGainCalculation is commented out in AzerothCore core.
+ *      We hook OnPlayerRewardKillRewarder via PlayerScript to award synthetic XP
+ *      for grey mobs so progression is never stalled.
  *
- * Creature → Player:
- *   playerLevel > contentLevel → inScale = (playerLevel/contentLevel)^1.5
- *   playerLevel ≤ contentLevel → inScale = 1.0
+ *   5. VISUAL LEVEL (per-player packet patch):
+ *      UNIT_FIELD_LEVEL is patched in outgoing update packets so each player sees
+ *      the creature at their own level (yellow nameplate instead of grey).
  *
- * contentLevel = the creature template's minlevel (zone-intended level)
+ * ============================================================================
+ * MIXED PARTY EXAMPLE
+ * ============================================================================
+ *
+ *   lvl 30 + lvl 15, questing together in a lvl 1 zone.
+ *   Creature template: wolf, lvl 1, HP = 55.
+ *
+ *   lvl 15 attacks:
+ *     outScale = baseHP(1) / baseHP(15) = 55/300 = 0.18
+ *     → deals 50 * 0.18 = ~9 damage. Kills in ~6 hits.
+ *
+ *   lvl 30 attacks:
+ *     outScale = baseHP(1) / baseHP(30) = 55/1100 = 0.05
+ *     → deals 300 * 0.05 = ~15 damage. Kills in ~4 hits.
+ *
+ *   RESULT: Both players kill the wolf in ~4-6 hits. TTK roughly equal.
+ *   The wolf's 55 HP remains natural. No HP inflation.
  *
  * ============================================================================
  * SKIPS
@@ -79,15 +104,8 @@
 #include "Log.h"
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
 #include <unordered_set>
-
-// ---------------------------------------------------------------------------
-// Tuning constant: damage scaling exponent.
-// 1.5 matches the approximate feel of retail scaling.
-// Lower value  → looser scaling (high-level players have an advantage)
-// Higher value → stricter scaling (forces closer parity to zone intended stats)
-// ---------------------------------------------------------------------------
-static constexpr float SCALE_EXPONENT = 1.5f;
 
 // ---------------------------------------------------------------------------
 // Helper: check if a map is excluded from content scaling
@@ -121,67 +139,164 @@ static uint8 GetContentLevel(Creature const* creature)
 }
 
 // ---------------------------------------------------------------------------
-// Helper: calculate outgoing damage scale factor (player -> creature)
+// Per-creature HP scaling state (used by Mode 1 and Mode 3)
+// Maps creature GUID -> { highestAttackerLevel, set of all attacker levels }
+// Cleared on creature death so respawns start fresh.
 // ---------------------------------------------------------------------------
-static float CalcOutgoingScale(uint8 playerLevel, uint8 contentLevel)
+struct CreatureScaleState
 {
-    if (playerLevel <= contentLevel || contentLevel == 0)
-        return 1.0f;
+    uint8 highestLevel = 0;
+    std::unordered_set<uint8> attackerLevels;
+};
+static std::unordered_map<ObjectGuid::LowType, CreatureScaleState> gCreatureState;
 
-    float ratio = static_cast<float>(contentLevel) / static_cast<float>(playerLevel);
-    return std::pow(ratio, SCALE_EXPONENT);
+// Query the expected max HP of a creature's class at a given level.
+// Uses the actual WotLK CreatureBaseStats DB table for accurate stat ratios.
+static uint32 GetBaseHPAtLevel(uint8 level, Creature const* creature)
+{
+    CreatureTemplate const* tmpl = creature->GetCreatureTemplate();
+    if (!tmpl)
+        return creature->GetMaxHealth();
+
+    CreatureBaseStats const* stats = sObjectMgr->GetCreatureBaseStats(level, tmpl->unit_class);
+    if (stats)
+        return stats->GenerateHealth(tmpl);
+
+    return creature->GetMaxHealth();
 }
 
-// ---------------------------------------------------------------------------
-// Helper: calculate incoming damage scale factor (creature -> player)
-// ---------------------------------------------------------------------------
-static float CalcIncomingScale(uint8 playerLevel, uint8 contentLevel)
+// Apply physical HP scaling to a creature.
+// targetLevel = the level whose baseHP we want the creature's max HP to represent.
+// Returns the scaling factor applied (or 1.0 if none).
+static float ApplyCreatureHP(Creature* creature, uint8 targetLevel, uint8 contentLevel)
 {
-    if (playerLevel <= contentLevel || contentLevel == 0)
+    uint32 contentHP  = GetBaseHPAtLevel(contentLevel, creature);
+    uint32 targetHP   = GetBaseHPAtLevel(targetLevel, creature);
+    uint32 currentMax = creature->GetMaxHealth();
+
+    // Only scale UP if targetHP is meaningfully larger than what we have
+    if (targetHP <= currentMax || contentHP == 0)
         return 1.0f;
 
-    float ratio = static_cast<float>(playerLevel) / static_cast<float>(contentLevel);
-    return std::pow(ratio, SCALE_EXPONENT);
-}
-
-// ---------------------------------------------------------------------------
-// HP scaling state: tracks which creature GUIDs already had their HP scaled
-// for the current life. Cleared on death so respawns start fresh.
-// ---------------------------------------------------------------------------
-static std::unordered_set<ObjectGuid::LowType> gScaledCreatures;
-
-// Scale creature max HP on the first damaging hit from a higher-level player.
-// Uses the same power-law formula as the damage scaler so HP and damage are
-// in balance: the fight duration feels the same regardless of player level.
-static void ScaleCreatureHP(Creature* creature, uint8 playerLevel, uint8 contentLevel)
-{
-    if (playerLevel <= contentLevel || contentLevel == 0)
-        return;
-
-    ObjectGuid::LowType guid = creature->GetGUID().GetCounter();
-    if (gScaledCreatures.count(guid))
-        return; // Already scaled for this life
-
-    gScaledCreatures.insert(guid);
-
-    float hpScale = std::pow(
-        static_cast<float>(playerLevel) / static_cast<float>(contentLevel),
-        SCALE_EXPONENT
-    ) * sModernWoWConfig->DynScaleHealthMult;
-
-    // Safety clamp — avoid absurd HP values at extreme level gaps
-    hpScale = std::clamp(hpScale, 1.0f, 50.0f);
-
-    uint32 baseMaxHP  = creature->GetMaxHealth();
-    uint32 newMaxHP   = static_cast<uint32>(baseMaxHP * hpScale);
-    float  currentPct = creature->GetHealthPct() / 100.0f;
+    float hpScale = static_cast<float>(targetHP) / static_cast<float>(currentMax);
+    uint32 newMaxHP = static_cast<uint32>(currentMax * hpScale);
+    float healthPct = creature->GetHealthPct() / 100.0f;
 
     creature->SetMaxHealth(newMaxHP);
-    creature->SetHealth(static_cast<uint32>(newMaxHP * currentPct));
+    creature->SetHealth(static_cast<uint32>(newMaxHP * healthPct));
 
     LOG_DEBUG("module.scaling",
-        "DynScale HP: Creature({}) contentLvl{} vs Player lvl{} → scale={:.2f} baseHP={} newMaxHP={}",
-        creature->GetEntry(), contentLevel, playerLevel, hpScale, baseMaxHP, newMaxHP);
+        "DynScale HP: Creature({}) scaled to lvl{} ({}→{} HP, scale={:.2f})",
+        creature->GetEntry(), targetLevel, currentMax, newMaxHP, hpScale);
+
+    return hpScale;
+}
+
+// Compute the average level of all recorded attackers for a creature.
+static uint8 GetPartyAverageLevel(const std::unordered_set<uint8>& levels)
+{
+    if (levels.empty())
+        return 0;
+
+    uint32 sum = 0;
+    for (uint8 lvl : levels)
+        sum += lvl;
+    return static_cast<uint8>(sum / levels.size());
+}
+
+// ---------------------------------------------------------------------------
+// MODE-AWARE SCALING FUNCTIONS
+// ---------------------------------------------------------------------------
+
+// Called from damage hooks for Player→Creature hits.
+// Handles all HP scaling side-effects (Mode 1 and 3) and returns the
+// outgoing damage multiplier to apply to this hit.
+static float GetOutgoingScale(Creature* creature, uint8 playerLevel, uint8 contentLevel)
+{
+    if (playerLevel <= contentLevel || contentLevel == 0 || !creature)
+        return 1.0f;
+
+    uint8 mode = sModernWoWConfig->DynScaleMode;
+
+    // ------------------------------------------------------------------
+    // MODE 1: Real Numbers — HP scales UP to highest party member.
+    //         Player damage is NOT modified.
+    // ------------------------------------------------------------------
+    if (mode == 1)
+    {
+        ObjectGuid::LowType guid = creature->GetGUID().GetCounter();
+        CreatureScaleState& state = gCreatureState[guid];
+
+        if (playerLevel > state.highestLevel)
+        {
+            ApplyCreatureHP(creature, playerLevel, contentLevel);
+            state.highestLevel = playerLevel;
+        }
+        return 1.0f; // Player always sees real damage numbers
+    }
+
+    // ------------------------------------------------------------------
+    // MODE 2: Equal TTK — Damage scaled DOWN per-player to content level.
+    //         Mob HP stays at template value. All players kill in ~same hits.
+    // ------------------------------------------------------------------
+    if (mode == 2)
+    {
+        uint32 playerLevelHP  = GetBaseHPAtLevel(playerLevel, creature);
+        uint32 contentLevelHP = GetBaseHPAtLevel(contentLevel, creature);
+
+        if (playerLevelHP > 0 && contentLevelHP > 0)
+            return static_cast<float>(contentLevelHP) / static_cast<float>(playerLevelHP);
+
+        return static_cast<float>(contentLevel) / static_cast<float>(playerLevel); // fallback
+    }
+
+    // ------------------------------------------------------------------
+    // MODE 3: Compromise — HP scaled to party average level.
+    //         Each player's damage adjusted relative to that average HP pool.
+    //         Higher-level players contribute more but not overwhelmingly.
+    // ------------------------------------------------------------------
+    if (mode == 3)
+    {
+        ObjectGuid::LowType guid = creature->GetGUID().GetCounter();
+        CreatureScaleState& state = gCreatureState[guid];
+
+        // Track all attacker levels
+        state.attackerLevels.insert(playerLevel);
+        if (playerLevel > state.highestLevel)
+            state.highestLevel = playerLevel;
+
+        uint8 avgLevel = GetPartyAverageLevel(state.attackerLevels);
+        if (avgLevel <= contentLevel)
+            return 1.0f;
+
+        // Scale HP up to average level
+        ApplyCreatureHP(creature, avgLevel, contentLevel);
+
+        // Scale each player's damage relative to the current HP pool
+        uint32 currentMaxHP      = creature->GetMaxHealth();
+        uint32 playerExpectedHP  = GetBaseHPAtLevel(playerLevel, creature);
+
+        if (playerExpectedHP > 0 && currentMaxHP > 0)
+            return static_cast<float>(currentMaxHP) / static_cast<float>(playerExpectedHP);
+    }
+
+    return 1.0f;
+}
+
+// Compute incoming damage multiplier (creature→player) — same formula for all modes.
+// Higher-level players take proportionally more damage to keep content challenging.
+static float GetIncomingScale(uint8 playerLevel, uint8 contentLevel, Creature const* creature)
+{
+    if (playerLevel <= contentLevel || contentLevel == 0 || !creature)
+        return 1.0f;
+
+    uint32 playerLevelHP  = GetBaseHPAtLevel(playerLevel, creature);
+    uint32 contentLevelHP = GetBaseHPAtLevel(contentLevel, creature);
+
+    if (contentLevelHP > 0 && playerLevelHP > contentLevelHP)
+        return static_cast<float>(playerLevelHP) / static_cast<float>(contentLevelHP);
+
+    return 1.0f;
 }
 
 // ---------------------------------------------------------------------------
@@ -240,16 +355,14 @@ public:
             uint8 playerLevel  = attacker->GetLevel();
             uint8 contentLevel = GetContentLevel(creature);
 
-            // Scale HP on first hit so the fight duration matches the damage reduction
-            ScaleCreatureHP(creature, playerLevel, contentLevel);
-
-            float scale = CalcOutgoingScale(playerLevel, contentLevel) * sModernWoWConfig->DynScaleDamageMult;
-            if (scale < 1.0f)
+            float scale = GetOutgoingScale(creature, playerLevel, contentLevel) * sModernWoWConfig->DynScaleDamageMult;
+            if (scale != 1.0f)
             {
                 damage = static_cast<uint32>(damage * scale);
                 LOG_DEBUG("module.scaling",
-                    "DynScale Melee Out: Player({}) lvl{} vs Creature({}) contentLvl{} → scale={:.3f} dmg={}",
-                    attacker->GetName(), playerLevel, creature->GetEntry(), contentLevel, scale, damage);
+                    "DynScale Melee Out (mode{}): Player({}) lvl{} vs Creature({}) contentLvl{} → scale={:.3f} dmg={}",
+                    sModernWoWConfig->DynScaleMode, attacker->GetName(), playerLevel,
+                    creature->GetEntry(), contentLevel, scale, damage);
             }
         }
         // Creature → Player
@@ -263,13 +376,14 @@ public:
             uint8 playerLevel  = target->GetLevel();
             uint8 contentLevel = GetContentLevel(creature);
 
-            float scale = CalcIncomingScale(playerLevel, contentLevel) * sModernWoWConfig->DynScaleDamageMult;
+            float scale = GetIncomingScale(playerLevel, contentLevel, creature) * sModernWoWConfig->DynScaleDamageMult;
             if (scale > 1.0f)
             {
                 damage = static_cast<uint32>(damage * scale);
                 LOG_DEBUG("module.scaling",
-                    "DynScale Melee In: Creature({}) contentLvl{} vs Player({}) lvl{} → scale={:.3f} dmg={}",
-                    creature->GetEntry(), contentLevel, target->GetName(), playerLevel, scale, damage);
+                    "DynScale Melee In (mode{}): Creature({}) contentLvl{} vs Player({}) lvl{} → scale={:.3f} dmg={}",
+                    sModernWoWConfig->DynScaleMode, creature->GetEntry(), contentLevel,
+                    target->GetName(), playerLevel, scale, damage);
             }
         }
     }
@@ -297,10 +411,8 @@ public:
             uint8 playerLevel  = attacker->GetLevel();
             uint8 contentLevel = GetContentLevel(creature);
 
-            ScaleCreatureHP(creature, playerLevel, contentLevel);
-
-            float scale = CalcOutgoingScale(playerLevel, contentLevel) * sModernWoWConfig->DynScaleDamageMult;
-            if (scale < 1.0f)
+            float scale = GetOutgoingScale(creature, playerLevel, contentLevel) * sModernWoWConfig->DynScaleDamageMult;
+            if (scale != 1.0f)
                 damage = static_cast<int32>(damage * scale);
         }
         // Creature → Player
@@ -314,7 +426,7 @@ public:
             uint8 playerLevel  = target->GetLevel();
             uint8 contentLevel = GetContentLevel(creature);
 
-            float scale = CalcIncomingScale(playerLevel, contentLevel) * sModernWoWConfig->DynScaleDamageMult;
+            float scale = GetIncomingScale(playerLevel, contentLevel, creature) * sModernWoWConfig->DynScaleDamageMult;
             if (scale > 1.0f)
                 damage = static_cast<int32>(damage * scale);
         }
@@ -343,10 +455,8 @@ public:
             uint8 dotPlayerLevel  = attacker->GetLevel();
             uint8 dotContentLevel = GetContentLevel(creature);
 
-            ScaleCreatureHP(creature, dotPlayerLevel, dotContentLevel);
-
-            float scale = CalcOutgoingScale(dotPlayerLevel, dotContentLevel) * sModernWoWConfig->DynScaleDamageMult;
-            if (scale < 1.0f)
+            float scale = GetOutgoingScale(creature, dotPlayerLevel, dotContentLevel) * sModernWoWConfig->DynScaleDamageMult;
+            if (scale != 1.0f)
                 damage = static_cast<uint32>(damage * scale);
         }
         // Creature DoT → Player
@@ -357,7 +467,7 @@ public:
             if (!creature || !IsCreatureScalable(creature))
                 return;
 
-            float scale = CalcIncomingScale(target->GetLevel(), GetContentLevel(creature)) * sModernWoWConfig->DynScaleDamageMult;
+            float scale = GetIncomingScale(target->GetLevel(), GetContentLevel(creature), creature) * sModernWoWConfig->DynScaleDamageMult;
             if (scale > 1.0f)
                 damage = static_cast<uint32>(damage * scale);
         }
@@ -408,15 +518,7 @@ public:
             valuesUpdateBuf.put<uint32>(levelPos, uint32(targetLevel));
         }
     }
-    // -----------------------------------------------------------------------
-    // Cleanup: remove creature from gScaledCreatures on death and evade.
-    //
-    // Death:  engine resets HP to template on respawn — clear so the NEXT
-    //         player to attack will rescale from the fresh template value.
-    // Evade:  engine regenerates the creature back to its current max HP
-    //         (which is already scaled), so we DO NOT clear on evade.
-    //         The creature keeps its scaled HP while alive; only death resets it.
-    // -----------------------------------------------------------------------
+
     void OnUnitDeath(Unit* unit, Unit* /*killer*/) override
     {
         if (!sModernWoWConfig->Enabled || !sModernWoWConfig->DynScaleEnabled)
@@ -424,21 +526,21 @@ public:
 
         Creature* creature = unit ? unit->ToCreature() : nullptr;
         if (creature)
-            gScaledCreatures.erase(creature->GetGUID().GetCounter());
+            gCreatureState.erase(creature->GetGUID().GetCounter());
     }
 };
 
 // ---------------------------------------------------------------------------
-// FormulaScript — XP override
+// PlayerScript — XP override
 // If content is too low level (grey mob), calculate synthetic XP reward
-// so progression remains active.
+// so progression remains active. Bypasses core's commented-out OnGainCalculation hook.
 // ---------------------------------------------------------------------------
-class ModernWoW_ContentScaleXPScript : public FormulaScript
+class ModernWoW_ContentScaleXPScript : public PlayerScript
 {
 public:
-    ModernWoW_ContentScaleXPScript() : FormulaScript("ModernWoW_ContentScaleXPScript") {}
+    ModernWoW_ContentScaleXPScript() : PlayerScript("ModernWoW_ContentScaleXPScript") {}
 
-    void OnGainCalculation(uint32& gain, Player* player, Unit* unit) override
+    void OnPlayerRewardKillRewarder(Player* player, KillRewarder* rewarder, bool /*isDungeon*/, float& /*rate*/) override
     {
         if (!sModernWoWConfig->Enabled || !sModernWoWConfig->DynScaleEnabled)
             return;
@@ -446,10 +548,14 @@ public:
         if (!sModernWoWConfig->DynScaleXP)
             return;
 
-        if (!player || !unit)
+        if (!player || !rewarder)
             return;
 
-        Creature* creature = unit->ToCreature();
+        Unit* victim = rewarder->GetVictim();
+        if (!victim)
+            return;
+
+        Creature* creature = victim->ToCreature();
         if (!creature)
             return;
 
@@ -464,16 +570,21 @@ public:
         if (static_cast<int32>(contentLevel) >= greyThreshold)
             return;
 
-        // Force synthetic XP for grey mobs to preserve leveling flow
-        if (gain == 0)
-        {
-            float contentFraction = static_cast<float>(contentLevel) / static_cast<float>(playerLevel);
-            uint32 syntheticXP = static_cast<uint32>(150.0f * static_cast<float>(playerLevel) * contentFraction);
-            gain = syntheticXP;
+        // Calculate synthetic XP reward for grey mobs so progression remains active.
+        float contentFraction = static_cast<float>(contentLevel) / static_cast<float>(playerLevel);
+        uint32 syntheticXP = static_cast<uint32>(150.0f * static_cast<float>(playerLevel) * contentFraction);
 
+        if (syntheticXP > 0)
+        {
+            // Notify other scripts of the XP gain
+            sScriptMgr->OnPlayerGiveXP(player, syntheticXP, creature, PlayerXPSource::XPSOURCE_KILL);
+            
+            // Actually reward the player
+            player->GiveXP(syntheticXP, creature);
+            
             LOG_DEBUG("module.scaling",
                 "DynScale XP: Player({}) lvl{} killed grey creature({}) contentLvl{} → synthetic XP={}",
-                player->GetName(), playerLevel, creature->GetEntry(), contentLevel, gain);
+                player->GetName(), playerLevel, creature->GetEntry(), contentLevel, syntheticXP);
         }
     }
 };

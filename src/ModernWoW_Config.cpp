@@ -51,6 +51,7 @@ void ModernWoWConfig::Load()
 
     // Dynamic Scaling
     DynScaleEnabled     = sConfigMgr->GetOption<bool>("ModernWoW.DynamicScaling.Enable", true);
+    DynScaleMode        = sConfigMgr->GetOption<uint8>("ModernWoW.DynamicScaling.Mode", 2);
     DynScaleMinLevel    = sConfigMgr->GetOption<uint8>("ModernWoW.DynamicScaling.MinLevel", 1);
     DynScaleMaxLevel    = sConfigMgr->GetOption<uint8>("ModernWoW.DynamicScaling.MaxLevel", 80);
     DynScaleHealthMult  = sConfigMgr->GetOption<float>("ModernWoW.DynamicScaling.HealthMultiplier", 1.0f);

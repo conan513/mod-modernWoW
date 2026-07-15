@@ -39,6 +39,7 @@ public:
 
     // Dynamic Scaling
     bool   DynScaleEnabled;
+    uint8  DynScaleMode;        // 1=RealNumbers(HP up), 2=EqualTTK(dmg down), 3=Compromise(avg)
     uint8  DynScaleMinLevel;
     uint8  DynScaleMaxLevel;
     float  DynScaleHealthMult;
@@ -85,6 +86,7 @@ private:
         AutoLootThreshold(1),
         AutoLootGold(true),
         DynScaleEnabled(true),
+        DynScaleMode(2),
         DynScaleMinLevel(1),
         DynScaleMaxLevel(80),
         DynScaleHealthMult(1.0f),
