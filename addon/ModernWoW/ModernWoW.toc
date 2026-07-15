@@ -12,5 +12,3 @@ ModernWoW.lua
 
 ## Feature modules
 Modules\AutoLoot.lua
-Modules\QuestTracker.lua
-Modules\Collections.lua

@@ -17,6 +17,16 @@ function AL:SetEnabled(val)
     self.enabled = val
 end
 
+-- Hook default LootFrame show to instantly hide if empty (fail-safe)
+LootFrame:HookScript("OnShow", function(self)
+    if ModernWoW:GetSetting("autoLoot") and AL.enabled then
+        if GetNumLootItems() == 0 then
+            self:Hide()
+            CloseLoot()
+        end
+    end
+end)
+
 -- ============================================================
 -- Hook the LootFrame to auto-take all items
 -- ============================================================
@@ -33,6 +43,7 @@ local function AutoLootAll()
     if numItems == 0 then
         -- Server already looted everything — close immediately
         CloseLoot()
+        LootFrame:Hide()
         return
     end
 
@@ -106,6 +117,7 @@ lootFrame:SetScript("OnEvent", function(self, event, ...)
             if numItems == 0 then
                 -- Server already looted everything — close immediately (no window shown)
                 CloseLoot()
+                LootFrame:Hide()
                 ShowLootFeedback("✓ Looted!")
             else
                 -- Try client-side auto-looting for remaining items
@@ -119,6 +131,7 @@ lootFrame:SetScript("OnEvent", function(self, event, ...)
                         LootFrame_OnEvent(LootFrame, "LOOT_OPENED", unpack(args))
                     else
                         CloseLoot()
+                        LootFrame:Hide()
                         ShowLootFeedback("✓ Looted!")
                     end
                 end)
@@ -137,6 +150,7 @@ lootFrame:SetScript("OnEvent", function(self, event, ...)
             if numItems == 0 then
                 ShowLootFeedback("✓ Looted!")
                 CloseLoot()
+                LootFrame:Hide()
             end
         end
     end

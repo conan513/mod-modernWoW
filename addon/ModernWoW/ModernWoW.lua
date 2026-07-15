@@ -9,8 +9,6 @@ ModernWoW.Prefix  = "MODERNWOW"
 -- Default settings
 local defaults = {
     autoLoot       = true,
-    questTracker   = true,
-    collections    = true,
     minimap        = { minimapPos = 200, hide = false },
 }
 
@@ -59,12 +57,7 @@ local function OnAddonMessage(prefix, message, channel, sender)
     -- Parse messages from server: "CMD:DATA"
     local cmd, data = strsplit(":", message, 2)
 
-    if cmd == "WQ_LIST" then
-        -- World quest list update from server
-        if ModernWoW.QuestTracker then
-            ModernWoW.QuestTracker:UpdateWorldQuests(data)
-        end
-    elseif cmd == "PONG" then
+    if cmd == "PONG" then
         ModernWoW:Debug("Server ping OK")
     end
 end
@@ -128,24 +121,16 @@ SlashCmdList["MODERNWOW"] = function(msg)
         ModernWoW:Print("Commands:")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow info|r        — Show addon status")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow autoloot|r    — Toggle auto-loot")
-        DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow tracker|r     — Toggle quest tracker")
 
     elseif cmd == "info" then
         ModernWoW:Print("Status:")
         DEFAULT_CHAT_FRAME:AddMessage("  Auto-Loot   : " .. (ModernWoW:GetSetting("autoLoot") and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
-        DEFAULT_CHAT_FRAME:AddMessage("  Quest Tracker: " .. (ModernWoW:GetSetting("questTracker") and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
 
     elseif cmd == "autoloot" then
         local val = not ModernWoW:GetSetting("autoLoot")
         ModernWoW:SetSetting("autoLoot", val)
         ModernWoW:Print("Auto-Loot: " .. (val and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
         if ModernWoW.AutoLoot then ModernWoW.AutoLoot:SetEnabled(val) end
-
-    elseif cmd == "tracker" then
-        local val = not ModernWoW:GetSetting("questTracker")
-        ModernWoW:SetSetting("questTracker", val)
-        ModernWoW:Print("Quest Tracker: " .. (val and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
-        if ModernWoW.QuestTracker then ModernWoW.QuestTracker:SetEnabled(val) end
 
     else
         ModernWoW:Print("Unknown command. Type /mwow help")
