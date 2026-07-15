@@ -121,6 +121,22 @@ static uint8 GetContentLevel(Creature const* creature)
     return static_cast<uint8>((static_cast<uint16>(minL) + maxL) / 2);
 }
 
+// Returns the maximum level at which a creature is considered grey to a player of the given level
+static uint8 GetGreyLevel(uint8 plvl)
+{
+    if (plvl <= 5)
+        return 0;
+    if (plvl <= 9)
+        return plvl - 5;
+    if (plvl <= 19)
+        return plvl - 5 - (plvl - 5) / 5;
+    if (plvl <= 39)
+        return plvl - 5 - (plvl - 5) / 10;
+    if (plvl <= 59)
+        return plvl - 10 - (plvl - 10) / 5;
+    return plvl - 5 - (plvl - 5) / 5;
+}
+
 // ---------------------------------------------------------------------------
 // Per-creature HP scaling state (used by Mode 1 and Mode 3)
 // Maps creature GUID -> { highestAttackerLevel, set of all attacker levels }
@@ -224,6 +240,10 @@ static float GetOutgoingScale(Creature* creature, uint8 playerLevel, uint8 conte
     if (playerLevel <= contentLevel || contentLevel == 0 || !creature)
         return 1.0f;
 
+    // Only apply scaling if the creature's level is grey to the player
+    if (contentLevel >= GetGreyLevel(playerLevel))
+        return 1.0f;
+
     uint8 mode = sModernWoWConfig->DynScaleMode;
 
     // ------------------------------------------------------------------
@@ -307,6 +327,10 @@ static float GetOutgoingScale(Creature* creature, uint8 playerLevel, uint8 conte
 static float GetIncomingScale(uint8 playerLevel, uint8 contentLevel, Creature const* creature)
 {
     if (playerLevel <= contentLevel || contentLevel == 0 || !creature)
+        return 1.0f;
+
+    // Only apply scaling if the creature's level is grey to the player
+    if (contentLevel >= GetGreyLevel(playerLevel))
         return 1.0f;
 
     uint32 playerLevelHP  = GetBaseHPAtLevel(playerLevel, creature);
@@ -523,6 +547,13 @@ public:
         if (!creature || !IsCreatureScalable(creature))
             return;
 
+        uint8 playerLevel = target->GetLevel();
+        uint8 contentLevel = GetContentLevel(creature);
+
+        // Only scale visual level if the creature's level is grey to the player
+        if (contentLevel >= GetGreyLevel(playerLevel))
+            return;
+
         auto it = posPointers.other.find(UNIT_FIELD_LEVEL);
         if (it != posPointers.other.end())
         {
@@ -584,9 +615,8 @@ public:
         uint8 playerLevel  = player->GetLevel();
         uint8 contentLevel = GetContentLevel(creature);
 
-        // Do not interfere if the creature is not grey (e.g. within 8 levels)
-        int32 greyThreshold = static_cast<int32>(playerLevel) - 8;
-        if (static_cast<int32>(contentLevel) >= greyThreshold)
+        // Do not interfere if the creature is not grey
+        if (contentLevel >= GetGreyLevel(playerLevel))
             return;
 
         // Calculate synthetic XP reward for grey mobs so progression remains active.
@@ -680,6 +710,10 @@ public:
         uint8 contentLevel = GetContentLevel(creature);
 
         if (playerLevel <= contentLevel)
+            return;
+
+        // Only apply loot scaling if the creature's level is grey to the player
+        if (contentLevel >= GetGreyLevel(playerLevel))
             return;
 
         // Boost proportional to level advantage, capped at 2× to prevent trivialization
