@@ -79,6 +79,7 @@
 #include "Log.h"
 #include <algorithm>
 #include <cmath>
+#include <unordered_set>
 
 // ---------------------------------------------------------------------------
 // Tuning constant: damage scaling exponent.
@@ -144,6 +145,46 @@ static float CalcIncomingScale(uint8 playerLevel, uint8 contentLevel)
 }
 
 // ---------------------------------------------------------------------------
+// HP scaling state: tracks which creature GUIDs already had their HP scaled
+// for the current life. Cleared on death so respawns start fresh.
+// ---------------------------------------------------------------------------
+static std::unordered_set<ObjectGuid::LowType> gScaledCreatures;
+
+// Scale creature max HP on the first damaging hit from a higher-level player.
+// Uses the same power-law formula as the damage scaler so HP and damage are
+// in balance: the fight duration feels the same regardless of player level.
+static void ScaleCreatureHP(Creature* creature, uint8 playerLevel, uint8 contentLevel)
+{
+    if (playerLevel <= contentLevel || contentLevel == 0)
+        return;
+
+    ObjectGuid::LowType guid = creature->GetGUID().GetCounter();
+    if (gScaledCreatures.count(guid))
+        return; // Already scaled for this life
+
+    gScaledCreatures.insert(guid);
+
+    float hpScale = std::pow(
+        static_cast<float>(playerLevel) / static_cast<float>(contentLevel),
+        SCALE_EXPONENT
+    ) * sModernWoWConfig->DynScaleHealthMult;
+
+    // Safety clamp — avoid absurd HP values at extreme level gaps
+    hpScale = std::clamp(hpScale, 1.0f, 50.0f);
+
+    uint32 baseMaxHP  = creature->GetMaxHealth();
+    uint32 newMaxHP   = static_cast<uint32>(baseMaxHP * hpScale);
+    float  currentPct = creature->GetHealthPct() / 100.0f;
+
+    creature->SetMaxHealth(newMaxHP);
+    creature->SetHealth(static_cast<uint32>(newMaxHP * currentPct));
+
+    LOG_DEBUG("module.scaling",
+        "DynScale HP: Creature({}) contentLvl{} vs Player lvl{} → scale={:.2f} baseHP={} newMaxHP={}",
+        creature->GetEntry(), contentLevel, playerLevel, hpScale, baseMaxHP, newMaxHP);
+}
+
+// ---------------------------------------------------------------------------
 // Helper: check if creature is eligible for scaling
 // ---------------------------------------------------------------------------
 static bool IsCreatureScalable(Creature const* creature)
@@ -199,7 +240,10 @@ public:
             uint8 playerLevel  = attacker->GetLevel();
             uint8 contentLevel = GetContentLevel(creature);
 
-            float scale = CalcOutgoingScale(playerLevel, contentLevel);
+            // Scale HP on first hit so the fight duration matches the damage reduction
+            ScaleCreatureHP(creature, playerLevel, contentLevel);
+
+            float scale = CalcOutgoingScale(playerLevel, contentLevel) * sModernWoWConfig->DynScaleDamageMult;
             if (scale < 1.0f)
             {
                 damage = static_cast<uint32>(damage * scale);
@@ -219,7 +263,7 @@ public:
             uint8 playerLevel  = target->GetLevel();
             uint8 contentLevel = GetContentLevel(creature);
 
-            float scale = CalcIncomingScale(playerLevel, contentLevel);
+            float scale = CalcIncomingScale(playerLevel, contentLevel) * sModernWoWConfig->DynScaleDamageMult;
             if (scale > 1.0f)
             {
                 damage = static_cast<uint32>(damage * scale);
@@ -253,7 +297,9 @@ public:
             uint8 playerLevel  = attacker->GetLevel();
             uint8 contentLevel = GetContentLevel(creature);
 
-            float scale = CalcOutgoingScale(playerLevel, contentLevel);
+            ScaleCreatureHP(creature, playerLevel, contentLevel);
+
+            float scale = CalcOutgoingScale(playerLevel, contentLevel) * sModernWoWConfig->DynScaleDamageMult;
             if (scale < 1.0f)
                 damage = static_cast<int32>(damage * scale);
         }
@@ -268,7 +314,7 @@ public:
             uint8 playerLevel  = target->GetLevel();
             uint8 contentLevel = GetContentLevel(creature);
 
-            float scale = CalcIncomingScale(playerLevel, contentLevel);
+            float scale = CalcIncomingScale(playerLevel, contentLevel) * sModernWoWConfig->DynScaleDamageMult;
             if (scale > 1.0f)
                 damage = static_cast<int32>(damage * scale);
         }
@@ -294,7 +340,12 @@ public:
             if (!IsCreatureScalable(creature))
                 return;
 
-            float scale = CalcOutgoingScale(attacker->GetLevel(), GetContentLevel(creature));
+            uint8 dotPlayerLevel  = attacker->GetLevel();
+            uint8 dotContentLevel = GetContentLevel(creature);
+
+            ScaleCreatureHP(creature, dotPlayerLevel, dotContentLevel);
+
+            float scale = CalcOutgoingScale(dotPlayerLevel, dotContentLevel) * sModernWoWConfig->DynScaleDamageMult;
             if (scale < 1.0f)
                 damage = static_cast<uint32>(damage * scale);
         }
@@ -306,7 +357,7 @@ public:
             if (!creature || !IsCreatureScalable(creature))
                 return;
 
-            float scale = CalcIncomingScale(target->GetLevel(), GetContentLevel(creature));
+            float scale = CalcIncomingScale(target->GetLevel(), GetContentLevel(creature)) * sModernWoWConfig->DynScaleDamageMult;
             if (scale > 1.0f)
                 damage = static_cast<uint32>(damage * scale);
         }
@@ -356,6 +407,24 @@ public:
 
             valuesUpdateBuf.put<uint32>(levelPos, uint32(targetLevel));
         }
+    }
+    // -----------------------------------------------------------------------
+    // Cleanup: remove creature from gScaledCreatures on death and evade.
+    //
+    // Death:  engine resets HP to template on respawn — clear so the NEXT
+    //         player to attack will rescale from the fresh template value.
+    // Evade:  engine regenerates the creature back to its current max HP
+    //         (which is already scaled), so we DO NOT clear on evade.
+    //         The creature keeps its scaled HP while alive; only death resets it.
+    // -----------------------------------------------------------------------
+    void OnUnitDeath(Unit* unit, Unit* /*killer*/) override
+    {
+        if (!sModernWoWConfig->Enabled || !sModernWoWConfig->DynScaleEnabled)
+            return;
+
+        Creature* creature = unit ? unit->ToCreature() : nullptr;
+        if (creature)
+            gScaledCreatures.erase(creature->GetGUID().GetCounter());
     }
 };
 
