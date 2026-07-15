@@ -72,6 +72,12 @@ public:
         handler->PSendSysMessage("  InstantMail   : %s", sModernWoWConfig->InstantMailEnabled ? "|cff00ff00ON|r" : "|cffff0000OFF|r");
         handler->PSendSysMessage("  GuildPerks    : %s (+%u%% XP, %u%% CashFlow)", sModernWoWConfig->GuildPerksEnabled ? "|cff00ff00ON|r" : "|cffff0000OFF|r",
             sModernWoWConfig->GuildPerksXPBonus, sModernWoWConfig->GuildPerksCashFlow);
+        handler->PSendSysMessage("  CombatPacing  : %s (+%d Haste, +%.0f%% Melee, %.1fx HP regen, %.1fx Mana regen)",
+            sModernWoWConfig->CombatPacingEnabled ? "|cff00ff00ON|r" : "|cffff0000OFF|r",
+            sModernWoWConfig->CombatPacingHasteRating,
+            sModernWoWConfig->CombatPacingMeleeSpeedPct,
+            sModernWoWConfig->CombatPacingOOCHealthMult,
+            sModernWoWConfig->CombatPacingOOCManaMult);
         return true;
     }
 

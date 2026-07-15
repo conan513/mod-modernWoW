@@ -78,6 +78,14 @@ public:
     uint32 GuildPerksXPBonus;
     uint32 GuildPerksCashFlow;
 
+    // Combat Pacing (Retail-like faster combat)
+    bool   CombatPacingEnabled;
+    int32  CombatPacingHasteRating;   // Flat haste rating bonus for all players
+                                       //   (melee + spell + ranged, lvl80: 32.79/1%)
+    float  CombatPacingMeleeSpeedPct; // Extra melee swing speed % on top of haste
+    float  CombatPacingOOCHealthMult; // OOC health regen rate multiplier
+    float  CombatPacingOOCManaMult;   // OOC mana regen rate multiplier
+
 private:
     ModernWoWConfig() :
         Enabled(true),
@@ -108,7 +116,12 @@ private:
         QuestsShowLowLevelAsNormal(true),
         GuildPerksEnabled(true),
         GuildPerksXPBonus(10),
-        GuildPerksCashFlow(5)
+        GuildPerksCashFlow(5),
+        CombatPacingEnabled(true),
+        CombatPacingHasteRating(800),
+        CombatPacingMeleeSpeedPct(20.0f),
+        CombatPacingOOCHealthMult(5.0f),
+        CombatPacingOOCManaMult(3.0f)
     {}
 
     // Helper to parse comma-separated uint32 list

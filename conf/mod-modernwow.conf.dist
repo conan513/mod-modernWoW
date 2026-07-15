@@ -193,3 +193,57 @@ ModernWoW.GuildPerks.XPBonus = 10
 # Cash flow perk: percentage of loot gold auto-deposited to guild bank
 # Default: 5 (5%)
 ModernWoW.GuildPerks.CashFlow = 5
+
+#####################################
+# COMBAT PACING (Retail-like speed)
+#####################################
+#
+# Makes combat feel faster and more dynamic, closer to retail WoW (Shadowlands+).
+#
+# Haste formula at lvl 80: 32.79 Haste Rating = 1% Haste
+#   New cast time  = Base cast time  / (1 + Haste%)
+#   New swing time = Base weapon spd / (1 + Haste%)
+#   GCD minimum    = 1.0s (WotLK client hard cap — cannot go lower in a module)
+#
+# Example with HasteRatingBonus = 800 (+24.4% haste at lvl80):
+#   Frostbolt (3.0s base):  3.0s / 1.244 = 2.41s
+#   2.6s weapon swing:      2.6s / 1.244 = 2.09s  (before MeleeSpeedPct)
+#   GCD:                    1.5s / 1.244 = 1.21s  (approaching 1.0s cap)
+#
+# Combined with typical gear haste (~400-600 rating), players effectively
+# reach 35-45% total haste — close to Shadowlands baseline feel.
+
+# Enable Combat Pacing feature
+# Default: 1 (enabled)
+ModernWoW.CombatPacing.Enable = 1
+
+# Flat haste rating bonus injected for all players at login.
+# Affects: spell cast time, GCD, melee swing, ranged attack speed.
+# 0       = disabled (no bonus)
+# 500     = +15.3% haste  (subtle improvement)
+# 800     = +24.4% haste  (default — noticeable but not jarring)
+# 1200    = +36.6% haste  (very fast, GCD near 1.1s with gear)
+# 1640    = +50%   haste  (extreme — GCD at 1.0s cap, Frostbolt ~2.0s)
+ModernWoW.CombatPacing.HasteRatingBonus = 800
+
+# Additional melee attack speed % modifier applied on top of haste.
+# This makes melee auto-attacks "feel" faster independent of spell haste.
+# 0.0   = disabled
+# 10.0  = 10% faster swings (subtle)
+# 20.0  = 20% faster swings (default — 2.6s weapon → ~1.75s combined with haste)
+# 30.0  = 30% faster swings (aggressive)
+ModernWoW.CombatPacing.MeleeSpeedPct = 20.0
+
+# Out-of-combat HP regen rate multiplier.
+# Retail WoW: players recover full HP within ~5 seconds of leaving combat.
+# 1.0 = vanilla rate (slow — need food/drink)
+# 5.0 = default (fast but not instant; feels like retail between pulls)
+# 10.0 = very fast (near-instant HP recovery)
+ModernWoW.CombatPacing.OOCHealthMult = 5.0
+
+# Out-of-combat mana regen rate multiplier.
+# 1.0 = vanilla rate
+# 3.0 = default (moderately faster OOC mana regen)
+# 5.0 = fast (casters rarely need to drink between pulls)
+ModernWoW.CombatPacing.OOCManaMult = 3.0
+

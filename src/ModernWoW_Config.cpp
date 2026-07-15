@@ -92,8 +92,16 @@ void ModernWoWConfig::Load()
     GuildPerksXPBonus  = sConfigMgr->GetOption<uint32>("ModernWoW.GuildPerks.XPBonus", 10);
     GuildPerksCashFlow = sConfigMgr->GetOption<uint32>("ModernWoW.GuildPerks.CashFlow", 5);
 
-    LOG_INFO("module", "mod-modernWoW: Config loaded (AutoLoot={}, DynScale={}, PersonalLoot={}, SpellQueue={}, WorldQuests={}, CatchUp={}, InstantMail={}, GuildPerks={})",
+    // Combat Pacing
+    CombatPacingEnabled      = sConfigMgr->GetOption<bool>("ModernWoW.CombatPacing.Enable", true);
+    CombatPacingHasteRating  = sConfigMgr->GetOption<int32>("ModernWoW.CombatPacing.HasteRatingBonus", 800);
+    CombatPacingMeleeSpeedPct= sConfigMgr->GetOption<float>("ModernWoW.CombatPacing.MeleeSpeedPct", 20.0f);
+    CombatPacingOOCHealthMult= sConfigMgr->GetOption<float>("ModernWoW.CombatPacing.OOCHealthMult", 5.0f);
+    CombatPacingOOCManaMult  = sConfigMgr->GetOption<float>("ModernWoW.CombatPacing.OOCManaMult", 3.0f);
+
+    LOG_INFO("module", "mod-modernWoW: Config loaded (AutoLoot={}, DynScale={}, PersonalLoot={}, SpellQueue={}, WorldQuests={}, CatchUp={}, InstantMail={}, GuildPerks={}, CombatPacing={})",
         AutoLootMode, DynScaleEnabled ? 1 : 0, PersonalLootMode,
         SpellQueueEnabled ? 1 : 0, WorldQuestsEnabled ? 1 : 0,
-        CatchUpEnabled ? 1 : 0, InstantMailEnabled ? 1 : 0, GuildPerksEnabled ? 1 : 0);
+        CatchUpEnabled ? 1 : 0, InstantMailEnabled ? 1 : 0, GuildPerksEnabled ? 1 : 0,
+        CombatPacingEnabled ? 1 : 0);
 }

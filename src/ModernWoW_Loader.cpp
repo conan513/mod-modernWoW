@@ -20,6 +20,7 @@ void AddModernWoW_SpellQueueScripts();
 void AddModernWoW_WorldQuestScripts();
 void AddModernWoW_CatchUpScripts();
 void AddModernWoW_GuildPerksScripts();
+void AddModernWoW_CombatPacingScripts();
 void AddModernWoW_CommandScripts();
 
 // WorldScript: handles startup config load and announcement
@@ -65,5 +66,6 @@ void Addmod_modernWoWScripts()
     AddModernWoW_WorldQuestScripts();
     AddModernWoW_CatchUpScripts();
     AddModernWoW_GuildPerksScripts();
+    AddModernWoW_CombatPacingScripts();
     AddModernWoW_CommandScripts();
 }
