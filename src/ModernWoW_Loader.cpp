@@ -50,6 +50,9 @@ public:
 // Module entry point — called by AzerothCore's module loader
 void Addmod_modernWoWScripts()
 {
+    // Load config eagerly so script registration can evaluate features correctly
+    sModernWoWConfig->Load();
+
     // Register world script first (handles config loading)
     new ModernWoW_WorldScript();
 

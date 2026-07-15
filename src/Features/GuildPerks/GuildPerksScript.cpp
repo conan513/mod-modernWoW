@@ -31,7 +31,46 @@
 #include "LootMgr.h"
 #include "Mail.h"
 #include "World.h"
+#include "DatabaseEnv.h"
 #include "Log.h"
+#include <mutex>
+#include <unordered_map>
+
+// ---------------------------------------------------------------------------
+// CashFlow accumulator — instead of one DB transaction per loot event,
+// we accumulate gold in-memory and flush every 30 seconds.
+// Key: guildId  |  Value: copper amount pending deposit
+// ---------------------------------------------------------------------------
+static std::unordered_map<uint32, uint32> gPendingCashFlow;
+static std::mutex gCashFlowMutex;
+
+static void FlushCashFlow()
+{
+    std::unordered_map<uint32, uint32> snapshot;
+
+    // Grab and clear under lock, then write outside the lock
+    {
+        std::lock_guard<std::mutex> lock(gCashFlowMutex);
+        if (gPendingCashFlow.empty())
+            return;
+        snapshot = std::move(gPendingCashFlow);
+        gPendingCashFlow.clear();
+    }
+
+    for (auto const& [guildId, copper] : snapshot)
+    {
+        Guild* guild = sGuildMgr->GetGuildById(guildId);
+        if (!guild)
+            continue;
+
+        CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
+        (void)guild->ModifyBankMoney(trans, copper, true);
+        CharacterDatabase.CommitTransaction(trans);
+
+        LOG_DEBUG("module", "mod-modernWoW GuildPerks: CashFlow flush — deposited {} copper to guild {}",
+            copper, guildId);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // FormulaScript — Guild XP Bonus
@@ -60,6 +99,7 @@ public:
 
 // ---------------------------------------------------------------------------
 // PlayerScript — Cash Flow (gold percentage to guild bank on loot)
+// Accumulates gold in-memory; actual DB write happens every 30 s via WorldScript.
 // ---------------------------------------------------------------------------
 class ModernWoW_GuildPerksPlayerScript : public PlayerScript
 {
@@ -78,10 +118,6 @@ public:
         if (!guildId)
             return;
 
-        Guild* guild = sGuildMgr->GetGuildById(guildId);
-        if (!guild)
-            return;
-
         if (loot->gold == 0)
             return;
 
@@ -90,14 +126,44 @@ public:
         if (cashFlow == 0)
             return;
 
-        // Deposit to guild bank
-        CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
-        (void)guild->ModifyBankMoney(trans, cashFlow, true);
-        CharacterDatabase.CommitTransaction(trans);
+        // Accumulate in-memory — NO DB hit here
+        {
+            std::lock_guard<std::mutex> lock(gCashFlowMutex);
+            gPendingCashFlow[guildId] += cashFlow;
+        }
 
-        LOG_DEBUG("module", "mod-modernWoW GuildPerks: CashFlow {} copper to guild {} for player {}",
+        LOG_DEBUG("module", "mod-modernWoW GuildPerks: CashFlow +{} copper queued for guild {} (player {})",
             cashFlow, guildId, player->GetName());
     }
+};
+
+// ---------------------------------------------------------------------------
+// WorldScript — CashFlow flush timer (every 30 seconds)
+// ---------------------------------------------------------------------------
+class ModernWoW_GuildPerksCashFlowWorldScript : public WorldScript
+{
+public:
+    ModernWoW_GuildPerksCashFlowWorldScript() : WorldScript("ModernWoW_GuildPerksCashFlowWorldScript") {}
+
+    void OnUpdate(uint32 diff) override
+    {
+        if (!sModernWoWConfig->Enabled || !sModernWoWConfig->GuildPerksEnabled)
+            return;
+
+        if (sModernWoWConfig->GuildPerksCashFlow == 0)
+            return;
+
+        _flushTimer += diff;
+        if (_flushTimer < FLUSH_INTERVAL_MS)
+            return;
+
+        _flushTimer = 0;
+        FlushCashFlow();
+    }
+
+private:
+    static constexpr uint32 FLUSH_INTERVAL_MS = 30000; // 30 seconds
+    uint32 _flushTimer = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -137,7 +203,10 @@ void AddModernWoW_GuildPerksScripts()
             new ModernWoW_GuildPerksFormulaScript();
 
         if (sModernWoWConfig->GuildPerksCashFlow > 0)
+        {
             new ModernWoW_GuildPerksPlayerScript();
+            new ModernWoW_GuildPerksCashFlowWorldScript();
+        }
     }
 
     if (sModernWoWConfig->InstantMailEnabled || sModernWoWConfig->QuestsShowLowLevelAsNormal)

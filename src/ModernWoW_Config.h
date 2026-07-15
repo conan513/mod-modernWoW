@@ -78,7 +78,36 @@ public:
     uint32 GuildPerksCashFlow;
 
 private:
-    ModernWoWConfig() = default;
+    ModernWoWConfig() :
+        Enabled(true),
+        Announce(true),
+        AutoLootMode(1),
+        AutoLootThreshold(1),
+        AutoLootGold(true),
+        DynScaleEnabled(true),
+        DynScaleMinLevel(1),
+        DynScaleMaxLevel(80),
+        DynScaleHealthMult(1.0f),
+        DynScaleDamageMult(1.0f),
+        DynScaleXP(true),
+        DynScaleLoot(true),
+        DynScaleExcludeRaids(true),
+        PersonalLootMode(1),
+        PersonalLootSoloMult(1.2f),
+        SpellQueueEnabled(true),
+        SpellQueueWindowMs(400),
+        WorldQuestsEnabled(true),
+        WorldQuestsActiveCount(12),
+        WorldQuestsDurationHours(24),
+        CatchUpEnabled(true),
+        CatchUpXPMultiplier(2.0f),
+        CatchUpBetterLoot(true),
+        InstantMailEnabled(true),
+        QuestsShowLowLevelAsNormal(true),
+        GuildPerksEnabled(true),
+        GuildPerksXPBonus(10),
+        GuildPerksCashFlow(5)
+    {}
 
     // Helper to parse comma-separated uint32 list
     std::vector<uint32> ParseUInt32List(const std::string& str);
