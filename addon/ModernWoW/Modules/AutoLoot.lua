@@ -82,6 +82,9 @@ end
 -- Loot event hooks
 -- ============================================================
 
+-- Unregister default LootFrame from LOOT_OPENED to prevent it from flashing/opening
+LootFrame:UnregisterEvent("LOOT_OPENED")
+
 local lootFrame = CreateFrame("Frame", "MWoW_AutoLootFrame")
 lootFrame:RegisterEvent("LOOT_OPENED")
 lootFrame:RegisterEvent("LOOT_CLOSED")
@@ -89,20 +92,52 @@ lootFrame:RegisterEvent("LOOT_SLOT_CLEARED")
 
 lootFrame:SetScript("OnEvent", function(self, event, ...)
     if event == "LOOT_OPENED" then
+        local args = {...}
+        -- If auto-loot is disabled, immediately open default LootFrame
+        if not ModernWoW:GetSetting("autoLoot") or not AL.enabled then
+            LootFrame_OnEvent(LootFrame, "LOOT_OPENED", unpack(args))
+            return
+        end
+
+        -- Auto-loot is enabled:
         -- Small delay so server-side loot packets arrive first
         C_Timer.After(0.05, function()
-            AutoLootAll()
+            local numItems = GetNumLootItems()
+            if numItems == 0 then
+                -- Server already looted everything — close immediately (no window shown)
+                CloseLoot()
+                ShowLootFeedback("✓ Looted!")
+            else
+                -- Try client-side auto-looting for remaining items
+                AutoLootAll()
+
+                -- Re-check after client-side looting commands have been sent
+                C_Timer.After(0.05, function()
+                    local numRemaining = GetNumLootItems()
+                    if numRemaining > 0 then
+                        -- Remaining items exist (e.g. bags full, roll item, etc.), so show default LootFrame
+                        LootFrame_OnEvent(LootFrame, "LOOT_OPENED", unpack(args))
+                    else
+                        CloseLoot()
+                        ShowLootFeedback("✓ Looted!")
+                    end
+                end)
+            end
         end)
 
     elseif event == "LOOT_CLOSED" then
-        -- Nothing needed
+        -- Forward to LootFrame if it was shown/registered or let default engine handle it.
+        -- LootFrame is still registered for LOOT_CLOSED, so the client engine handles it directly.
+        -- No action needed here.
 
     elseif event == "LOOT_SLOT_CLEARED" then
         -- Check if loot window is now empty
-        local numItems = GetNumLootItems()
-        if numItems == 0 then
-            ShowLootFeedback("✓ Looted!")
-            CloseLoot()
+        if ModernWoW:GetSetting("autoLoot") and AL.enabled then
+            local numItems = GetNumLootItems()
+            if numItems == 0 then
+                ShowLootFeedback("✓ Looted!")
+                CloseLoot()
+            end
         end
     end
 end)

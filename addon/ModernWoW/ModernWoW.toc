@@ -15,4 +15,3 @@ Modules\AutoLoot.lua
 Modules\QuestTracker.lua
 Modules\Collections.lua
 Modules\DamageMeter.lua
-Modules\ModernUnitFrames.lua

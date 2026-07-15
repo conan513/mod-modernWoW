@@ -10,7 +10,6 @@ ModernWoW.Prefix  = "MODERNWOW"
 local defaults = {
     autoLoot       = true,
     questTracker   = true,
-    modernFrames   = true,
     damageMeter    = true,
     collections    = true,
     minimap        = { minimapPos = 200, hide = false },
@@ -135,7 +134,6 @@ SlashCmdList["MODERNWOW"] = function(msg)
         ModernWoW:Print("Commands:")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow info|r        — Show addon status")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow autoloot|r    — Toggle auto-loot")
-        DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow frames|r      — Toggle modern unit frames")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow tracker|r     — Toggle quest tracker")
         DEFAULT_CHAT_FRAME:AddMessage("  |cffFFD700/mwow meter|r       — Toggle damage meter")
 
@@ -143,7 +141,6 @@ SlashCmdList["MODERNWOW"] = function(msg)
         ModernWoW:Print("Status:")
         DEFAULT_CHAT_FRAME:AddMessage("  Auto-Loot   : " .. (ModernWoW:GetSetting("autoLoot") and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
         DEFAULT_CHAT_FRAME:AddMessage("  Quest Tracker: " .. (ModernWoW:GetSetting("questTracker") and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
-        DEFAULT_CHAT_FRAME:AddMessage("  Modern Frames: " .. (ModernWoW:GetSetting("modernFrames") and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
         DEFAULT_CHAT_FRAME:AddMessage("  Damage Meter : " .. (ModernWoW:GetSetting("damageMeter") and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
 
     elseif cmd == "autoloot" then
@@ -151,11 +148,6 @@ SlashCmdList["MODERNWOW"] = function(msg)
         ModernWoW:SetSetting("autoLoot", val)
         ModernWoW:Print("Auto-Loot: " .. (val and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
         if ModernWoW.AutoLoot then ModernWoW.AutoLoot:SetEnabled(val) end
-
-    elseif cmd == "frames" then
-        local val = not ModernWoW:GetSetting("modernFrames")
-        ModernWoW:SetSetting("modernFrames", val)
-        ModernWoW:Print("Modern Unit Frames: " .. (val and "|cff00ff00ON|r" or "|cffff0000OFF|r"))
 
     elseif cmd == "tracker" then
         local val = not ModernWoW:GetSetting("questTracker")
