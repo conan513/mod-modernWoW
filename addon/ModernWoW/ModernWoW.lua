@@ -49,7 +49,10 @@ end
 ModernWoW.callbacks = {}
 
 function ModernWoW:RegisterCallback(cmd, callback)
-    self.callbacks[cmd] = callback
+    if not self.callbacks[cmd] then
+        self.callbacks[cmd] = {}
+    end
+    table.insert(self.callbacks[cmd], callback)
 end
 
 function ModernWoW:SendMessage(msg)
@@ -68,7 +71,9 @@ local function OnAddonMessage(prefix, message, channel, sender)
     end
 
     if ModernWoW.callbacks[cmd] then
-        ModernWoW.callbacks[cmd](data)
+        for _, cb in ipairs(ModernWoW.callbacks[cmd]) do
+            cb(data)
+        end
     end
 end
 

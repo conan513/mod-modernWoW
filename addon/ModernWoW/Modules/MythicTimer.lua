@@ -107,7 +107,8 @@ local function CreateTimerFrame()
     local div1 = f:CreateTexture(nil, "ARTWORK")
     div1:SetSize(200, 1)
     div1:SetPoint("TOP", deathsText, "BOTTOM", 0, -5)
-    div1:SetTexture(0.3, 0.3, 0.3, 0.5)
+    div1:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
+    div1:SetVertexColor(0.3, 0.3, 0.3, 0.5)
 
     -- ── Trash Progress label ──────────────────────────────────────────────
     local trashLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -138,7 +139,8 @@ local function CreateTimerFrame()
     local div2 = f:CreateTexture(nil, "ARTWORK")
     div2:SetSize(200, 1)
     div2:SetPoint("TOP", trashBar, "BOTTOM", 0, -5)
-    div2:SetTexture(0.3, 0.3, 0.3, 0.5)
+    div2:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
+    div2:SetVertexColor(0.3, 0.3, 0.3, 0.5)
 
     -- Boss list container
     local bossContainer = CreateFrame("Frame", nil, f)

@@ -73,7 +73,8 @@ local function CreateDashboardFrame()
     local div1 = f:CreateTexture(nil, "ARTWORK")
     div1:SetSize(300, 1)
     div1:SetPoint("TOPLEFT", ksText, "BOTTOMLEFT", 0, -8)
-    div1:SetTexture(0.3, 0.3, 0.3, 0.5)
+    div1:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
+    div1:SetVertexColor(0.3, 0.3, 0.3, 0.5)
 
     -- Weekly Affixes
     local affixesHeader = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -91,7 +92,8 @@ local function CreateDashboardFrame()
     local div2 = f:CreateTexture(nil, "ARTWORK")
     div2:SetSize(300, 1)
     div2:SetPoint("TOPLEFT", affixesText, "BOTTOMLEFT", 0, -8)
-    div2:SetTexture(0.3, 0.3, 0.3, 0.5)
+    div2:SetTexture("Interface\\ChatFrame\\ChatFrameBackground")
+    div2:SetVertexColor(0.3, 0.3, 0.3, 0.5)
 
     -- Great Vault section
     local vaultHeader = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")

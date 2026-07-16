@@ -54,14 +54,14 @@
  *   Creature template: wolf, lvl 1, HP = 55.
  *
  *   lvl 15 attacks:
- *     outScale = baseDmg(contentLvl) / baseDmg(15)  [proportional reduction]
- *     → deals scaled damage; kills in roughly the same hits as a lvl1 player.
+ *     outScale = baseHP(1) / baseHP(15) = 55/300 = 0.18
+ *     → deals ~9 damage per hit, ~6 hits to kill.
  *
  *   lvl 30 attacks:
- *     outScale = baseDmg(contentLvl) / baseDmg(30)  [larger reduction]
- *     → deals scaled damage; kills in roughly the same hits as a lvl1 player.
+ *     outScale = baseHP(1) / baseHP(30) = 55/1100 = 0.05
+ *     → deals ~15 damage per hit, ~4 hits to kill.
  *
- *   RESULT: All players kill the wolf in ~4-6 hits. TTK roughly equal.
+ *   RESULT: Both players kill the wolf in ~4-6 hits. TTK roughly equal.
  *   The wolf's 55 HP remains natural. No HP inflation.
  *
  * ============================================================================
@@ -164,29 +164,6 @@ static uint32 GetBaseHPAtLevel(uint8 level, Creature const* creature)
     return creature->GetMaxHealth();
 }
 
-// Returns the creature class's expected base damage output at the given level.
-// Using BaseDamage from CreatureBaseStats gives a much more accurate proxy for
-// player combat effectiveness than HP ratios. HP grows disproportionately fast
-// at low levels (e.g. lvl1→lvl2), causing the HP-ratio formula to over-correct:
-// a higher-level player ends up needing MORE hits than a lower-level one.
-// BaseDamage tracks the same content-tier calibration as player power curves.
-// The template modifier cancels in the ratio, so it is omitted here.
-static float GetBaseDamageAtLevel(uint8 level, Creature const* creature)
-{
-    CreatureTemplate const* tmpl = creature->GetCreatureTemplate();
-    if (!tmpl)
-        return 0.0f;
-
-    CreatureBaseStats const* stats = sObjectMgr->GetCreatureBaseStats(level, tmpl->unit_class);
-    if (!stats)
-        return 0.0f;
-
-    uint32 expIdx = static_cast<uint32>(sWorld->getIntConfig(CONFIG_EXPANSION));
-    if (expIdx >= static_cast<uint32>(MAX_EXPANSIONS))
-        expIdx = static_cast<uint32>(MAX_EXPANSIONS) - 1;
-
-    return stats->BaseDamage[expIdx];
-}
 
 // Apply physical HP scaling to a creature.
 // targetLevel = the level whose baseHP we want the creature's max HP to represent.
@@ -267,22 +244,14 @@ static float GetOutgoingScale(Creature* creature, uint8 playerLevel, uint8 conte
     // MODE 2: Equal TTK — Damage scaled DOWN per-player to content level.
     //         Mob HP stays at template value. All players kill in ~same hits.
     //
-    //         BUG FIX: Previously used HP ratios, which over-corrected at low
-    //         levels because HP grows faster than player damage between levels.
-    //         Now uses creature BaseDamage ratios — these scale proportionally
-    //         to player combat effectiveness within each content tier.
+    //         Uses creature base health ratios — derived from database curves
+    //         to scale player damage proportionally with level content tier.
     // ------------------------------------------------------------------
     if (mode == 2)
     {
-        float contentDmg = GetBaseDamageAtLevel(contentLevel, creature);
-        float playerDmg  = GetBaseDamageAtLevel(playerLevel, creature);
-
-        if (playerDmg > 0.0f && contentDmg > 0.0f)
-            return contentDmg / playerDmg;
-
-        // Fallback: HP ratio (less accurate at low levels, but avoids zero-division)
         uint32 playerLevelHP  = GetBaseHPAtLevel(playerLevel, creature);
         uint32 contentLevelHP = GetBaseHPAtLevel(contentLevel, creature);
+
         if (playerLevelHP > 0 && contentLevelHP > 0)
             return static_cast<float>(contentLevelHP) / static_cast<float>(playerLevelHP);
 
